@@ -41,7 +41,7 @@ export function ReaderToolbar({
         <Link
           to="/library"
           aria-label="Back to Library"
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-text-secondary hover:text-white hover:bg-[#1d1d26] transition-colors shrink-0 border border-transparent hover:border-[#282836]"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-text-secondary hover:text-white hover:bg-[#1d1d26] transition-colors shrink-0 border border-transparent hover:border-[#282836] cursor-pointer"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           <span className="hidden sm:inline uppercase tracking-wider font-mono text-[11px]">Vault</span>
@@ -54,7 +54,7 @@ export function ReaderToolbar({
           onClick={onToggleSidebar}
           aria-label={sidebarOpen ? 'Hide Page Rail' : 'Show Page Rail'}
           title={sidebarOpen ? 'Hide Page Rail' : 'Show Page Rail'}
-          className={`p-1.5 rounded-lg transition-all border ${
+          className={`p-1.5 rounded-lg transition-all border cursor-pointer ${
             sidebarOpen
               ? 'bg-[#ffd23f]/15 border-[#ffd23f]/40 text-[#ffd23f]'
               : 'text-text-muted hover:text-text-primary hover:bg-[#1d1d26] border-transparent'
@@ -92,7 +92,7 @@ export function ReaderToolbar({
           onClick={onPrev}
           disabled={!canPrev}
           aria-label="Previous Page"
-          className="p-1.5 rounded-lg text-text-secondary hover:text-white hover:bg-[#1c1c26] disabled:opacity-20 disabled:cursor-not-allowed transition-colors comic-btn-tactile border border-transparent hover:border-[#2c2c3a]"
+          className="p-1.5 rounded-lg text-text-secondary hover:text-white hover:bg-[#1c1c26] disabled:opacity-20 disabled:cursor-not-allowed transition-colors comic-btn-tactile border border-transparent hover:border-[#2c2c3a] cursor-pointer"
         >
           <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
         </button>
@@ -101,7 +101,7 @@ export function ReaderToolbar({
           onClick={onNext}
           disabled={!canNext}
           aria-label="Next Page"
-          className="p-1.5 rounded-lg text-text-secondary hover:text-white hover:bg-[#1c1c26] disabled:opacity-20 disabled:cursor-not-allowed transition-colors comic-btn-tactile border border-transparent hover:border-[#2c2c3a]"
+          className="p-1.5 rounded-lg text-text-secondary hover:text-white hover:bg-[#1c1c26] disabled:opacity-20 disabled:cursor-not-allowed transition-colors comic-btn-tactile border border-transparent hover:border-[#2c2c3a] cursor-pointer"
         >
           <ChevronRight className="w-4 h-4 stroke-[2.5]" />
         </button>
@@ -113,7 +113,7 @@ export function ReaderToolbar({
           onClick={onToggleAI}
           aria-label={aiOpen ? 'Hide Comic Companion' : 'Open Comic Companion'}
           title={aiOpen ? 'Hide Comic Companion' : 'Open Comic Companion'}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all comic-btn-tactile border ${
+          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all comic-btn-tactile border cursor-pointer ${
             aiOpen
               ? 'bg-[#182028] text-[#08d9d6] border-[#08d9d6]/50 shadow-[0_0_10px_rgba(8,217,214,0.2)]'
               : 'bg-[#16161d] text-text-secondary hover:text-text-primary hover:bg-[#1c1c26] border-[#252532]'

@@ -179,7 +179,7 @@ export default function LibraryPage() {
                 COMIC <span className="text-[#ffd23f]">VAULT</span>
               </h1>
               <span className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-[#171720] text-[#ffd23f] border border-[#282836]">
-                {comics.length} {comics.length === 1 ? 'ISSUE' : 'ISSUES'}
+                {comics.length} {comics.length === 1 ? 'ARCHIVE' : 'ARCHIVES'}
               </span>
             </div>
             <p className="text-xs sm:text-sm text-text-muted mt-1">
@@ -189,7 +189,7 @@ export default function LibraryPage() {
 
           <button
             onClick={() => setUploadOpen(true)}
-            className="flex items-center justify-center gap-2 bg-[#ffd23f] hover:bg-[#e6bd35] text-black font-comic text-sm font-bold uppercase tracking-wider px-5 py-2.5 rounded-xl shadow-comic border-2 border-black transition-all comic-btn-tactile shrink-0"
+            className="flex items-center justify-center gap-2 bg-[#ffd23f] hover:bg-[#e6bd35] text-black font-comic text-sm font-bold uppercase tracking-wider px-5 py-2.5 rounded-xl shadow-comic border-2 border-black transition-all comic-btn-tactile shrink-0 cursor-pointer"
           >
             <Plus className="w-4 h-4 stroke-[3]" aria-hidden="true" />
             <span>ADD NEW ISSUE</span>

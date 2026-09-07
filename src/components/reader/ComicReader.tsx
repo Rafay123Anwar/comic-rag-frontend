@@ -54,6 +54,10 @@ export function ComicReader({
   const [thumbLoaded, setThumbLoaded] = useState(false);
   const [directThumbError, setDirectThumbError] = useState(false);
 
+  // Mobile touch swipe state
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+
   const readerContainerRef = useRef<HTMLDivElement | null>(null);
   const transformComponentRef = useRef<ReactZoomPanPinchRef | null>(null);
 
@@ -143,6 +147,35 @@ export function ComicReader({
     if (onSignedUrlExpired) {
       onSignedUrlExpired();
     }
+  };
+
+  // Mobile Touch Swipe Handling
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const handleTouchEnd = () => {
+    if (touchStart === null || touchEnd === null) return;
+    // When zoomed in, preserve zoom pan interactions instead of swiping pages
+    if (currentScale > 1.05) return;
+
+    const diff = touchStart - touchEnd;
+    const isLeftSwipe = diff > 50;
+    const isRightSwipe = diff < -50;
+
+    if (isLeftSwipe && currentPage < totalPages) {
+      onPageChange(currentPage + 1);
+    } else if (isRightSwipe && currentPage > 1) {
+      onPageChange(currentPage - 1);
+    }
+
+    setTouchStart(null);
+    setTouchEnd(null);
   };
 
   // Keyboard navigation
@@ -295,7 +328,7 @@ export function ComicReader({
           onClick={() => setShowOcrOverlay((v) => !v)}
           title={showOcrOverlay ? 'Hide Transcript' : 'Inspect OCR & Transcript'}
           aria-label="Toggle OCR text inspection"
-          className={`p-1.5 rounded-full transition-colors ${
+          className={`p-1.5 rounded-full transition-colors cursor-pointer ${
             showOcrOverlay
               ? 'bg-[#ffd23f] text-black'
               : 'text-text-secondary hover:text-white hover:bg-[#22222e]'
@@ -309,7 +342,7 @@ export function ComicReader({
           onClick={toggleFullscreen}
           title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen Reader'}
           aria-label="Toggle Fullscreen"
-          className="p-1.5 rounded-full text-text-secondary hover:text-white hover:bg-[#22222e] transition-colors"
+          className="p-1.5 rounded-full text-text-secondary hover:text-white hover:bg-[#22222e] transition-colors cursor-pointer"
         >
           {isFullscreen ? (
             <Minimize2 className="w-3.5 h-3.5" />
@@ -320,7 +353,12 @@ export function ComicReader({
       </div>
 
       {/* Main Comic Canvas with Progressive Two-Stage Rendering */}
-      <div className="relative flex-1 flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-hidden">
+      <div
+        className="relative flex-1 flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-hidden touch-pan-y"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
         {/* Loading Spinner for Ready Pages Still Fetching */}
         {!isPageProcessing && !effectiveThumbSrc && !effectiveHighResSrc && !isCompleteFailure && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#08080a]/80 backdrop-blur-sm z-10">
@@ -463,7 +501,7 @@ export function ComicReader({
                     disabled={currentScale <= 1.01}
                     title="Zoom Out (-)"
                     aria-label="Zoom Out"
-                    className="p-1.5 rounded-full text-text-secondary hover:text-white hover:bg-[#22222e] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    className="p-1.5 rounded-full text-text-secondary hover:text-white hover:bg-[#22222e] disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
                   >
                     <ZoomOut className="w-3.5 h-3.5" />
                   </button>
@@ -474,7 +512,7 @@ export function ComicReader({
                     onClick={() => resetTransform(200)}
                     title="Click to reset zoom (100%)"
                     aria-label="Current zoom level, click to reset"
-                    className="px-2 py-0.5 rounded text-[11px] font-mono font-bold text-text-primary hover:text-[#ffd23f] hover:bg-[#1a1a24] transition-colors select-none min-w-[46px] text-center"
+                    className="px-2 py-0.5 rounded text-[11px] font-mono font-bold text-text-primary hover:text-[#ffd23f] hover:bg-[#1a1a24] transition-colors select-none min-w-[46px] text-center cursor-pointer"
                   >
                     {Math.round(currentScale * 100)}%
                   </button>
@@ -486,7 +524,7 @@ export function ComicReader({
                     disabled={currentScale >= 3.99}
                     title="Zoom In (+)"
                     aria-label="Zoom In"
-                    className="p-1.5 rounded-full text-text-secondary hover:text-white hover:bg-[#22222e] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    className="p-1.5 rounded-full text-text-secondary hover:text-white hover:bg-[#22222e] disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
                   >
                     <ZoomIn className="w-3.5 h-3.5" />
                   </button>
@@ -499,7 +537,7 @@ export function ComicReader({
                     onClick={() => resetTransform(200)}
                     title="Reset / Fit to Screen"
                     aria-label="Reset / Fit to Screen"
-                    className={`p-1.5 rounded-full transition-colors ${
+                    className={`p-1.5 rounded-full transition-colors cursor-pointer ${
                       currentScale > 1.01
                         ? 'text-[#ffd23f] hover:text-white hover:bg-[#22222e]'
                         : 'text-text-secondary hover:text-white hover:bg-[#22222e]'
@@ -529,43 +567,35 @@ export function ComicReader({
           </div>
         ) : null}
 
-        {/* Left click navigation zone (active when not zoomed in) */}
-        <div
+        {/* Permanently visible Previous Page navigation button */}
+        <button
+          type="button"
           onClick={() => currentPage > 1 && onPageChange(currentPage - 1)}
-          role="button"
-          tabIndex={-1}
-          aria-label="Previous Page click area"
-          className={`absolute left-0 top-0 bottom-0 w-1/6 sm:w-1/5 cursor-w-resize z-20 group transition-opacity ${
-            currentScale > 1.05 ? 'pointer-events-none opacity-0' : 'pointer-events-auto'
-          }`}
+          disabled={currentPage <= 1}
+          aria-label="Previous Page"
+          className={`absolute left-3 sm:left-5 top-1/2 -translate-y-1/2 z-20 p-2.5 sm:p-3 rounded-full bg-black/85 text-[#ffd23f] border border-[#ffd23f]/40 shadow-comic-sm transition-opacity cursor-pointer ${
+            currentPage <= 1
+              ? 'opacity-20 cursor-not-allowed pointer-events-none'
+              : 'opacity-50 hover:opacity-100'
+          } ${currentScale > 1.05 ? 'pointer-events-none !opacity-0' : 'pointer-events-auto'}`}
         >
-          <div className="h-full flex items-center justify-start pl-4 opacity-0 group-hover:opacity-80 transition-opacity">
-            {currentPage > 1 && (
-              <div className="p-2.5 rounded-full bg-black/85 text-[#ffd23f] border border-[#ffd23f]/40 shadow-comic-sm">
-                <ChevronLeft className="w-5 h-5 stroke-[3]" />
-              </div>
-            )}
-          </div>
-        </div>
+          <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3]" />
+        </button>
 
-        {/* Right click navigation zone (active when not zoomed in) */}
-        <div
+        {/* Permanently visible Next Page navigation button */}
+        <button
+          type="button"
           onClick={() => currentPage < totalPages && onPageChange(currentPage + 1)}
-          role="button"
-          tabIndex={-1}
-          aria-label="Next Page click area"
-          className={`absolute right-0 top-0 bottom-0 w-1/6 sm:w-1/5 cursor-e-resize z-20 group transition-opacity ${
-            currentScale > 1.05 ? 'pointer-events-none opacity-0' : 'pointer-events-auto'
-          }`}
+          disabled={currentPage >= totalPages}
+          aria-label="Next Page"
+          className={`absolute right-3 sm:right-5 top-1/2 -translate-y-1/2 z-20 p-2.5 sm:p-3 rounded-full bg-black/85 text-[#ffd23f] border border-[#ffd23f]/40 shadow-comic-sm transition-opacity cursor-pointer ${
+            currentPage >= totalPages
+              ? 'opacity-20 cursor-not-allowed pointer-events-none'
+              : 'opacity-50 hover:opacity-100'
+          } ${currentScale > 1.05 ? 'pointer-events-none !opacity-0' : 'pointer-events-auto'}`}
         >
-          <div className="h-full flex items-center justify-end pr-4 opacity-0 group-hover:opacity-80 transition-opacity">
-            {currentPage < totalPages && (
-              <div className="p-2.5 rounded-full bg-black/85 text-[#ffd23f] border border-[#ffd23f]/40 shadow-comic-sm">
-                <ChevronRight className="w-5 h-5 stroke-[3]" />
-              </div>
-            )}
-          </div>
-        </div>
+          <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3]" />
+        </button>
       </div>
 
       {/* OCR & AI Analysis Drawer Overlay */}
@@ -580,7 +610,7 @@ export function ComicReader({
             </div>
             <button
               onClick={() => setShowOcrOverlay(false)}
-              className="text-xs font-mono font-bold text-text-muted hover:text-white px-2.5 py-1 rounded bg-[#1e1e28] border border-[#2b2b38]"
+              className="text-xs font-mono font-bold text-text-muted hover:text-white px-2.5 py-1 rounded bg-[#1e1e28] border border-[#2b2b38] cursor-pointer"
             >
               CLOSE
             </button>

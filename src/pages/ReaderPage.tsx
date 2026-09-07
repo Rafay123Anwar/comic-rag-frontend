@@ -259,7 +259,7 @@ export default function ReaderPage() {
       <div className="md:hidden h-12 bg-[#121217] border-t-2 border-[#1a1a22] flex items-center justify-around px-3 shrink-0 z-30">
         <button
           onClick={() => setMobileNavOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1 rounded-lg font-comic text-xs text-[#ffd23f] bg-[#1a1a24] border border-[#262634] comic-btn-tactile"
+          className="flex items-center gap-1.5 px-3 py-1 rounded-lg font-comic text-xs text-[#ffd23f] bg-[#1a1a24] border border-[#262634] comic-btn-tactile cursor-pointer"
         >
           <BookOpen className="w-3.5 h-3.5" />
           <span>PAGES ({currentPage}/{comic.comic?.total_pages || comic.pages?.length || 1})</span>
@@ -267,7 +267,7 @@ export default function ReaderPage() {
 
         <button
           onClick={() => setMobileChatOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1 rounded-lg font-comic text-xs text-[#08d9d6] bg-[#122228] border border-[#08d9d6]/40 comic-btn-tactile"
+          className="flex items-center gap-1.5 px-3 py-1 rounded-lg font-comic text-xs text-[#08d9d6] bg-[#122228] border border-[#08d9d6]/40 comic-btn-tactile cursor-pointer"
         >
           <Sparkles className="w-3.5 h-3.5" />
           <span>ASK COMIC</span>

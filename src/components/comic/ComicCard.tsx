@@ -36,7 +36,7 @@ export function ComicCard({ comic, onDelete, isDeleting = false }: ComicCardProp
   };
 
   return (
-    <div className="group bg-[#15151c] border-2 border-black rounded-2xl overflow-hidden hover:border-[#ffd23f] transition-all duration-200 shadow-comic hover:shadow-[5px_5px_0px_#000] hover:-translate-y-1 flex flex-col select-none">
+    <div className="group bg-[#15151c] border-2 border-black rounded-2xl overflow-hidden hover:border-[#ffd23f] transition-all duration-200 shadow-comic hover:shadow-[5px_5px_0px_#000] hover:-translate-y-1 flex flex-col select-none cursor-pointer">
       {/* Comic Cover Area */}
       <div
         className="h-56 bg-[#0c0c10] flex items-center justify-center border-b-2 border-black relative overflow-hidden cursor-pointer"
@@ -142,10 +142,10 @@ export function ComicCard({ comic, onDelete, isDeleting = false }: ComicCardProp
         <div className="flex gap-2 pt-2 border-t border-[#20202c]">
           <button
             onClick={handleOpen}
-            className="flex-1 flex items-center justify-center gap-1.5 bg-[#ffd23f] hover:bg-[#e6bd35] text-black font-comic text-xs font-bold tracking-wider py-2 px-3 rounded-xl shadow-comic-sm border border-black comic-btn-tactile uppercase"
+            className="flex-1 flex items-center justify-center gap-1.5 bg-[#ffd23f] hover:bg-[#e6bd35] text-black font-comic text-xs font-bold tracking-wider py-2 px-3 rounded-xl shadow-comic-sm border border-black comic-btn-tactile uppercase cursor-pointer"
           >
             <BookOpen className="w-3.5 h-3.5 stroke-[2.5]" aria-hidden="true" />
-            {comic.status === 'processing' ? 'READ WHILE PROCESSING' : 'READ ISSUE'}
+            {comic.status === 'processing' ? 'READ WHILE PROCESSING' : 'LAUNCH VIEWER'}
           </button>
           {onDelete && (
             <button
@@ -158,7 +158,7 @@ export function ComicCard({ comic, onDelete, isDeleting = false }: ComicCardProp
               disabled={isDeleting}
               aria-label={`Remove ${comic.title} from vault`}
               title={isDeleting ? 'Deleting issue…' : 'Remove from vault'}
-              className="p-2 rounded-xl text-text-muted hover:text-[#ff2e63] hover:bg-[#ff2e63]/10 border border-transparent hover:border-[#ff2e63]/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              className="p-2 rounded-xl text-text-muted hover:text-[#ff2e63] hover:bg-[#ff2e63]/10 border border-transparent hover:border-[#ff2e63]/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer"
             >
               {isDeleting ? (
                 <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#ff2e63]" />

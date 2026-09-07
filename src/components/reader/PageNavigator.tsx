@@ -19,7 +19,7 @@ export function PageNavigator({
         onClick={onPrev}
         disabled={currentPage <= 1}
         aria-label="Go to previous page"
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-text-secondary hover:text-text-primary hover:bg-base-elevated disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-text-secondary hover:text-text-primary hover:bg-base-elevated disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
       >
         <ChevronLeft className="w-4 h-4" aria-hidden="true" />
         Prev
@@ -33,7 +33,7 @@ export function PageNavigator({
         onClick={onNext}
         disabled={currentPage >= totalPages}
         aria-label="Go to next page"
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-text-secondary hover:text-text-primary hover:bg-base-elevated disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-text-secondary hover:text-text-primary hover:bg-base-elevated disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
       >
         Next
         <ChevronRight className="w-4 h-4" aria-hidden="true" />

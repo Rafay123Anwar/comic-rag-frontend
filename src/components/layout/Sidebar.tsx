@@ -152,7 +152,7 @@ export const PageThumbnailItem = memo(function PageThumbnailItem({
       onClick={() => onSelect(pageNum)}
       aria-label={`Go to page ${pageNum}`}
       aria-current={isActive ? 'page' : undefined}
-      className={`w-full group text-left rounded-xl p-1.5 transition-all duration-150 relative flex items-center gap-2.5 border ${
+      className={`w-full group text-left rounded-xl p-1.5 transition-all duration-150 relative flex items-center gap-2.5 border cursor-pointer ${
         isActive
           ? 'bg-[#201d14] border-[#ffd23f] shadow-comic-sm'
           : 'bg-[#15151b] border-[#22222d] hover:border-[#ffd23f]/40 hover:bg-[#1a1a22]'
