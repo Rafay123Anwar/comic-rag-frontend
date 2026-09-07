@@ -12,25 +12,25 @@ import apiClient, { API_BASE_URL, UPLOAD_TIMEOUT } from './api';
  * Calls GET /comics/{comic_id}/status.
  */
 export async function getComicStatus(comicId: string, signal?: AbortSignal): Promise<ComicStatusResponse> {
-  const response = await apiClient.get<ComicStatusResponse>(`/comics/${comicId}/status`, { signal });
+  const response = await apiClient.get<ComicStatusResponse>(`/api/comics/${comicId}/status`, { signal });
   return response.data;
 }
 
 /**
  * Fetch list of all ingested comics from the backend.
- * Calls GET /comics.
+ * Calls GET /api/comics.
  */
 export async function getComics(signal?: AbortSignal): Promise<LocalComicEntry[]> {
-  const response = await apiClient.get<LocalComicEntry[]>('/comics', { signal });
+  const response = await apiClient.get<LocalComicEntry[]>('/api/comics', { signal });
   return response.data;
 }
 
 /**
  * Delete a comic and all associated backend resources.
- * Calls DELETE /comics/{comic_id}.
+ * Calls DELETE /api/comics/{comic_id}.
  */
 export async function deleteComic(comicId: string): Promise<ComicDeleteResponse> {
-  const response = await apiClient.delete<ComicDeleteResponse>(`/comics/${comicId}`);
+  const response = await apiClient.delete<ComicDeleteResponse>(`/api/comics/${comicId}`);
   return response.data;
 }
 
@@ -51,7 +51,7 @@ export async function uploadComic(
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await apiClient.post<ComicUploadResponse>('/comics/upload', formData, {
+  const response = await apiClient.post<ComicUploadResponse>('/api/comics/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
     // Override the default apiClient timeout for this long-running operation.
     timeout: UPLOAD_TIMEOUT,
@@ -69,18 +69,18 @@ export async function uploadComic(
 
 /**
  * Fetch full comic metadata and analyzed pages.
- * Calls GET /comics/{comic_id}.
+ * Calls GET /api/comics/{comic_id}.
  */
 export async function getComic(comicId: string, signal?: AbortSignal): Promise<ComicDetailResponse> {
-  const response = await apiClient.get<ComicDetailResponse>(`/comics/${comicId}`, { signal });
+  const response = await apiClient.get<ComicDetailResponse>(`/api/comics/${comicId}`, { signal });
   return response.data;
 }
 
 /**
  * Returns the URL for fetching the actual comic page image.
- * Calls GET /comics/{comic_id}/pages/{page_number}/image.
+ * Calls GET /api/comics/{comic_id}/pages/{page_number}/image.
  */
 export function getPageImageUrl(comicId: string, pageNumber: number): string {
-  return `${API_BASE_URL}/comics/${comicId}/pages/${pageNumber}/image`;
+  return `${API_BASE_URL}/api/comics/${comicId}/pages/${pageNumber}/image`;
 }
 

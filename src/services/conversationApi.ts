@@ -19,7 +19,7 @@ export async function getComicConversation(
   signal?: AbortSignal
 ): Promise<ConversationDetailResponse> {
   const response = await apiClient.get<ConversationDetailResponse>(
-    `/comics/${comicId}/conversation`,
+    `/api/comics/${comicId}/conversation`,
     { signal }
   );
   return response.data;

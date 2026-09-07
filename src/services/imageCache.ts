@@ -81,8 +81,8 @@ export async function getAuthenticatedImageUrl(
   }
 
   const endpoint = isThumbnail
-    ? `/comics/${comicId}/pages/${pageNumber}/thumbnail`
-    : `/comics/${comicId}/pages/${pageNumber}/image`;
+    ? `/api/comics/${comicId}/pages/${pageNumber}/thumbnail`
+    : `/api/comics/${comicId}/pages/${pageNumber}/image`;
 
   const fetchPromise = (async () => {
     try {

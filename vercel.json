@@ -25,10 +25,6 @@
       "destination": "http://13.218.185.215:8000/comics/upload"
     },
     {
-      "source": "/comics",
-      "destination": "http://13.218.185.215:8000/comics"
-    },
-    {
       "source": "/comics/:comicId/status",
       "destination": "http://13.218.185.215:8000/comics/:comicId/status"
     },
@@ -49,19 +45,8 @@
       "destination": "http://13.218.185.215:8000/comics/:comicId/pages/:path*"
     },
     {
-      "source": "/comics/:comicId/:subpath+",
-      "destination": "http://13.218.185.215:8000/comics/:comicId/:subpath+"
-    },
-    {
-      "source": "/comics/:comicId",
-      "has": [
-        {
-          "type": "header",
-          "key": "accept",
-          "value": ".*application/json.*"
-        }
-      ],
-      "destination": "http://13.218.185.215:8000/comics/:comicId"
+      "source": "/comics",
+      "destination": "http://13.218.185.215:8000/comics"
     },
     {
       "source": "/health",
