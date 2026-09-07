@@ -1,4 +1,4 @@
-import { ArrowLeft, ChevronLeft, ChevronRight, PanelLeft, Sparkles } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, FileText, PanelLeft, Sparkles } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import {
   type ComicDetailResponse,
@@ -16,6 +16,8 @@ interface ReaderToolbarProps {
   onToggleSidebar: () => void;
   aiOpen: boolean;
   onToggleAI: () => void;
+  ocrOpen?: boolean;
+  onToggleOcr?: () => void;
 }
 
 export function ReaderToolbar({
@@ -27,6 +29,8 @@ export function ReaderToolbar({
   onToggleSidebar,
   aiOpen,
   onToggleAI,
+  ocrOpen,
+  onToggleOcr,
 }: ReaderToolbarProps) {
   const total = getComicTotalPages(comic);
   const name = getComicName(comic);
@@ -107,13 +111,29 @@ export function ReaderToolbar({
         </button>
       </div>
 
-      {/* Right section: AI Companion Toggle (desktop; mobile uses bottom action bar) */}
-      <div className="hidden md:flex items-center gap-2">
+      {/* Right section: Transcript Toggle + Desktop AI Companion */}
+      <div className="flex items-center gap-2">
+        {onToggleOcr && (
+          <button
+            onClick={onToggleOcr}
+            aria-label={ocrOpen ? 'Hide Transcript' : 'Inspect Transcript'}
+            title={ocrOpen ? 'Hide Transcript' : 'Inspect Transcript'}
+            className={`p-1.5 rounded-lg border cursor-pointer transition-colors ${
+              ocrOpen
+                ? 'bg-[#ffd23f] text-black border-black shadow-comic-sm'
+                : 'text-text-secondary hover:text-white hover:bg-[#1c1c26] border-[#252532]'
+            }`}
+          >
+            <FileText className="w-4 h-4" />
+          </button>
+        )}
+
+        {/* Desktop AI Companion Toggle (mobile uses bottom bar) */}
         <button
           onClick={onToggleAI}
           aria-label={aiOpen ? 'Hide Comic Companion' : 'Open Comic Companion'}
           title={aiOpen ? 'Hide Comic Companion' : 'Open Comic Companion'}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all comic-btn-tactile border cursor-pointer ${
+          className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all comic-btn-tactile border cursor-pointer ${
             aiOpen
               ? 'bg-[#182028] text-[#08d9d6] border-[#08d9d6]/50 shadow-[0_0_10px_rgba(8,217,214,0.2)]'
               : 'bg-[#16161d] text-text-secondary hover:text-text-primary hover:bg-[#1c1c26] border-[#252532]'

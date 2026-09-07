@@ -33,6 +33,7 @@ export default function ReaderPage() {
   } = useUIStore();
 
   const [aiPanelOpen, setAiPanelOpen] = useState(true);
+  const [ocrOpen, setOcrOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => getSidebarWidth());
   const [aiPanelWidth, setAiPanelWidth] = useState<number>(() => getAIPanelWidth());
   const [highlightedPage, setHighlightedPage] = useState<number | null>(null);
@@ -169,6 +170,8 @@ export default function ReaderPage() {
             setAiPanelOpen((v) => !v);
           }
         }}
+        ocrOpen={ocrOpen}
+        onToggleOcr={() => setOcrOpen((v) => !v)}
       />
 
       {/* Main 3-Panel Resizable Desktop Experience */}
@@ -215,6 +218,8 @@ export default function ReaderPage() {
               onPageChange={navigateToPage}
               highlightedPage={highlightedPage}
               onSignedUrlExpired={handleSignedUrlExpired}
+              ocrOpen={ocrOpen}
+              onToggleOcr={() => setOcrOpen((v) => !v)}
             />
           </ErrorBoundary>
         </main>
@@ -256,22 +261,22 @@ export default function ReaderPage() {
       </div>
 
       {/* Mobile Bottom Quick Actions Bar */}
-      <div className="md:hidden h-14 bg-[#111116]/95 backdrop-blur-md border-t-2 border-[#1a1a24] flex items-center justify-between px-3.5 shrink-0 z-30 shadow-[0_-4px_16px_rgba(0,0,0,0.6)]">
+      <div className="md:hidden h-14 bg-[#111116]/95 backdrop-blur-md border-t-2 border-[#1a1a24] flex items-center justify-center gap-2.5 px-3 shrink-0 z-30 shadow-[0_-4px_16px_rgba(0,0,0,0.6)]">
         <button
           onClick={() => setMobileNavOpen(true)}
           aria-label="Open Comic Pages Rail"
-          className="flex items-center gap-2 px-3.5 py-2 rounded-xl font-comic text-xs tracking-wider text-[#ffd23f] bg-[#181822] hover:bg-[#20202e] border border-[#ffd23f]/30 comic-btn-tactile cursor-pointer shadow-sm active:scale-95 transition-all"
+          className="flex-1 max-w-[155px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl font-comic text-xs tracking-wider text-[#ffd23f] bg-[#181822] hover:bg-[#20202e] border border-[#ffd23f]/30 comic-btn-tactile cursor-pointer shadow-sm active:scale-95 transition-all truncate"
         >
-          <BookOpen className="w-4 h-4 text-[#ffd23f]" />
-          <span>PAGE {currentPage} / {comic.comic?.total_pages || comic.pages?.length || 1}</span>
+          <BookOpen className="w-3.5 h-3.5 text-[#ffd23f] shrink-0" />
+          <span className="truncate">PAGE {currentPage} / {comic.comic?.total_pages || comic.pages?.length || 1}</span>
         </button>
 
         <button
           onClick={() => setMobileChatOpen(true)}
           aria-label="Ask Comic AI Companion"
-          className="flex items-center gap-2 px-4 py-2 rounded-xl font-comic text-xs tracking-wider text-black bg-[#ffd23f] hover:bg-[#e6bd35] border border-black comic-btn-tactile cursor-pointer shadow-comic-sm active:scale-95 transition-all"
+          className="flex-1 max-w-[155px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl font-comic text-xs tracking-wider text-black bg-[#ffd23f] hover:bg-[#e6bd35] border border-black comic-btn-tactile cursor-pointer shadow-comic-sm active:scale-95 transition-all shrink-0"
         >
-          <Sparkles className="w-4 h-4 text-[#ff2e63] fill-[#ff2e63]" />
+          <Sparkles className="w-3.5 h-3.5 text-[#ff2e63] fill-[#ff2e63] shrink-0" />
           <span>ASK COMIC</span>
         </button>
       </div>
