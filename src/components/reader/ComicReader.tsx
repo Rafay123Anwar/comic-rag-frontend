@@ -68,14 +68,8 @@ export function ComicReader({
   const [thumbLoaded, setThumbLoaded] = useState(false);
   const [directThumbError, setDirectThumbError] = useState(false);
 
-  // Mobile touch swipe state
-  const [touchStart, setTouchStart] = useState<number | null>(null);
-  const [touchEnd, setTouchEnd] = useState<number | null>(null);
-
   const readerContainerRef = useRef<HTMLDivElement | null>(null);
   const transformComponentRef = useRef<ReactZoomPanPinchRef | null>(null);
-  const touchStartX = useRef<number | null>(null);
-  const touchStartY = useRef<number | null>(null);
 
   const comicId = getComicId(comic);
   const totalPages = getComicTotalPages(comic);
@@ -127,7 +121,10 @@ export function ComicReader({
     setThumbLoaded(thumbAlreadyCached);
     setDirectThumbError(false);
     setCurrentScale(1);
-    transformComponentRef.current?.resetTransform();
+    transformComponentRef.current?.resetTransform(0);
+    requestAnimationFrame(() => {
+      transformComponentRef.current?.centerView(1, 0);
+    });
   }, [comicId, currentPage, directHighResUrl, directThumbUrl]);
 
   const isDirectHighRes = isDirectImageUrl(directHighResUrl);
@@ -165,116 +162,58 @@ export function ComicReader({
     }
   };
 
-  // Mobile Touch Swipe Handling
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if (e.targetTouches.length === 1) {
-      const clientX = e.targetTouches[0].clientX;
-      const clientY = e.targetTouches[0].clientY;
-      touchStartX.current = clientX;
-      touchStartY.current = clientY;
-      setTouchStart(clientX);
-      setTouchEnd(null);
-    }
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (e.targetTouches.length === 1) {
-      setTouchEnd(e.targetTouches[0].clientX);
-    }
-  };
-
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    const startX = touchStartX.current ?? touchStart;
-    if (startX === null) return;
-    const endX = e.changedTouches?.[0]?.clientX ?? touchEnd;
-    if (endX === null || endX === undefined) return;
-
-    // When zoomed in, preserve zoom pan interactions instead of swiping pages
-    if (currentScale > 1.05) {
-      touchStartX.current = null;
-      touchStartY.current = null;
-      return;
-    }
-
-    const startY = touchStartY.current ?? 0;
-    const endY = e.changedTouches?.[0]?.clientY ?? 0;
-    const diffX = startX - endX;
-    const diffY = startY - endY;
-
-    // Only swipe if horizontal drag dominates vertical drag
-    if (Math.abs(diffX) > Math.abs(diffY)) {
-      if (diffX > 50 && currentPage < totalPages) {
-        onPageChange(currentPage + 1);
-      } else if (diffX < -50 && currentPage > 1) {
-        onPageChange(currentPage - 1);
-      }
-    }
-
-    touchStartX.current = null;
-    touchStartY.current = null;
-    setTouchStart(null);
-    setTouchEnd(null);
-  };
-
-  // Native touch listener on container to catch gestures reliably on mobile devices
+  // Single authoritative mobile touch swipe listener on container
   useEffect(() => {
     const container = readerContainerRef.current;
     if (!container) return;
 
-    let nativeStartX: number | null = null;
-    let nativeStartY: number | null = null;
+    let startX: number | null = null;
+    let startY: number | null = null;
+    let startTime = 0;
 
-    const onNativeTouchStart = (e: TouchEvent) => {
+    const onTouchStart = (e: TouchEvent) => {
+      // Only track single-finger gestures (multi-finger is for pinch zoom)
       if (e.touches.length === 1) {
-        nativeStartX = e.touches[0].clientX;
-        nativeStartY = e.touches[0].clientY;
-        touchStartX.current = nativeStartX;
-        touchStartY.current = nativeStartY;
-        setTouchStart(nativeStartX);
-        setTouchEnd(null);
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+        startTime = Date.now();
+      } else {
+        startX = null;
+        startY = null;
       }
     };
 
-    const onNativeTouchMove = (e: TouchEvent) => {
-      if (e.touches.length === 1) {
-        setTouchEnd(e.touches[0].clientX);
-      }
-    };
-
-    const onNativeTouchEnd = (e: TouchEvent) => {
-      if (nativeStartX === null) return;
+    const onTouchEnd = (e: TouchEvent) => {
+      if (startX === null || startY === null) return;
       if (e.changedTouches.length > 0) {
         const endX = e.changedTouches[0].clientX;
         const endY = e.changedTouches[0].clientY;
-        setTouchEnd(endX);
+        const diffX = startX - endX;
+        const diffY = startY - endY;
+        const elapsed = Date.now() - startTime;
 
-        if (currentScale <= 1.05) {
-          const diffX = nativeStartX - endX;
-          const diffY = (nativeStartY ?? endY) - endY;
-
-          if (Math.abs(diffX) > Math.abs(diffY)) {
-            if (diffX > 50 && currentPage < totalPages) {
+        // When zoomed in, user is panning the comic; do not swipe pages
+        if (currentScale <= 1.05 && elapsed < 800) {
+          // Horizontal gesture must dominate and exceed 40px threshold
+          if (Math.abs(diffX) > Math.abs(diffY) * 1.2 && Math.abs(diffX) > 40) {
+            if (diffX > 0 && currentPage < totalPages) {
               onPageChange(currentPage + 1);
-            } else if (diffX < -50 && currentPage > 1) {
+            } else if (diffX < 0 && currentPage > 1) {
               onPageChange(currentPage - 1);
             }
           }
         }
       }
-      nativeStartX = null;
-      nativeStartY = null;
-      touchStartX.current = null;
-      touchStartY.current = null;
+      startX = null;
+      startY = null;
     };
 
-    container.addEventListener('touchstart', onNativeTouchStart, { passive: true });
-    container.addEventListener('touchmove', onNativeTouchMove, { passive: true });
-    container.addEventListener('touchend', onNativeTouchEnd, { passive: true });
+    container.addEventListener('touchstart', onTouchStart, { passive: true });
+    container.addEventListener('touchend', onTouchEnd, { passive: true });
 
     return () => {
-      container.removeEventListener('touchstart', onNativeTouchStart);
-      container.removeEventListener('touchmove', onNativeTouchMove);
-      container.removeEventListener('touchend', onNativeTouchEnd);
+      container.removeEventListener('touchstart', onTouchStart);
+      container.removeEventListener('touchend', onTouchEnd);
     };
   }, [currentScale, currentPage, totalPages, onPageChange]);
 
@@ -472,12 +411,7 @@ export function ComicReader({
       </div>
 
       {/* Main Comic Canvas with Progressive Two-Stage Rendering */}
-      <div
-        className="relative flex-1 flex items-center justify-center p-0 sm:p-2 md:p-4 overflow-hidden touch-pan-y w-full h-full"
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-      >
+      <div className="relative flex-1 flex items-center justify-center p-0 sm:p-2 md:p-4 overflow-hidden touch-pan-y w-full h-full">
         {/* Loading Spinner for Ready Pages Still Fetching */}
         {!isPageProcessing && !effectiveThumbSrc && !effectiveHighResSrc && !isCompleteFailure && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#08080a]/80 backdrop-blur-sm z-10">
@@ -551,8 +485,8 @@ export function ComicReader({
             {({ zoomIn, zoomOut, resetTransform }) => (
               <>
                 <TransformComponent
-                  wrapperClass="!w-full !h-full !flex !items-center !justify-center select-none"
-                  contentClass={`!flex !items-center !justify-center transition-cursor ${
+                  wrapperClass="!w-full !h-full select-none"
+                  contentClass={`transition-cursor ${
                     currentScale > 1.05
                       ? 'cursor-grab active:cursor-grabbing'
                       : 'cursor-default'
@@ -567,7 +501,12 @@ export function ComicReader({
                         alt={`Page ${currentPage} Preview`}
                         loading="eager"
                         decoding="async"
-                        onLoad={() => setThumbLoaded(true)}
+                        onLoad={() => {
+                          setThumbLoaded(true);
+                          requestAnimationFrame(() => {
+                            transformComponentRef.current?.centerView(1, 0);
+                          });
+                        }}
                         onError={handleDirectThumbError}
                         className={`max-h-[calc(100dvh-7.5rem)] md:max-h-[calc(100vh-6.5rem)] w-auto max-w-full object-contain mx-auto block rounded-none sm:rounded-xl border-0 sm:border-2 border-[#15151c] shadow-[0_4px_30px_rgba(0,0,0,0.9)] transition-opacity duration-200 ${
                           thumbLoaded ? 'opacity-90 blur-[0.5px]' : 'opacity-0'
@@ -585,6 +524,9 @@ export function ComicReader({
                         decoding="async"
                         onLoad={() => {
                           setHighResLoaded(true);
+                          requestAnimationFrame(() => {
+                            transformComponentRef.current?.centerView(1, 0);
+                          });
                         }}
                         onError={handleDirectHighResError}
                         className={`max-h-[calc(100dvh-7.5rem)] md:max-h-[calc(100vh-6.5rem)] w-auto max-w-full object-contain mx-auto block rounded-none sm:rounded-xl border-0 sm:border-2 border-[#15151c] shadow-[0_4px_30px_rgba(0,0,0,0.9)] transition-opacity duration-300 ${
