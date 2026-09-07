@@ -256,20 +256,22 @@ export default function ReaderPage() {
       </div>
 
       {/* Mobile Bottom Quick Actions Bar */}
-      <div className="md:hidden h-12 bg-[#121217] border-t-2 border-[#1a1a22] flex items-center justify-around px-3 shrink-0 z-30">
+      <div className="md:hidden h-14 bg-[#111116]/95 backdrop-blur-md border-t-2 border-[#1a1a24] flex items-center justify-between px-3.5 shrink-0 z-30 shadow-[0_-4px_16px_rgba(0,0,0,0.6)]">
         <button
           onClick={() => setMobileNavOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1 rounded-lg font-comic text-xs text-[#ffd23f] bg-[#1a1a24] border border-[#262634] comic-btn-tactile cursor-pointer"
+          aria-label="Open Comic Pages Rail"
+          className="flex items-center gap-2 px-3.5 py-2 rounded-xl font-comic text-xs tracking-wider text-[#ffd23f] bg-[#181822] hover:bg-[#20202e] border border-[#ffd23f]/30 comic-btn-tactile cursor-pointer shadow-sm active:scale-95 transition-all"
         >
-          <BookOpen className="w-3.5 h-3.5" />
-          <span>PAGES ({currentPage}/{comic.comic?.total_pages || comic.pages?.length || 1})</span>
+          <BookOpen className="w-4 h-4 text-[#ffd23f]" />
+          <span>PAGE {currentPage} / {comic.comic?.total_pages || comic.pages?.length || 1}</span>
         </button>
 
         <button
           onClick={() => setMobileChatOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1 rounded-lg font-comic text-xs text-[#08d9d6] bg-[#122228] border border-[#08d9d6]/40 comic-btn-tactile cursor-pointer"
+          aria-label="Ask Comic AI Companion"
+          className="flex items-center gap-2 px-4 py-2 rounded-xl font-comic text-xs tracking-wider text-black bg-[#ffd23f] hover:bg-[#e6bd35] border border-black comic-btn-tactile cursor-pointer shadow-comic-sm active:scale-95 transition-all"
         >
-          <Sparkles className="w-3.5 h-3.5" />
+          <Sparkles className="w-4 h-4 text-[#ff2e63] fill-[#ff2e63]" />
           <span>ASK COMIC</span>
         </button>
       </div>

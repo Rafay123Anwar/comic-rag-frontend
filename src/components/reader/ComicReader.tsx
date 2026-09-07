@@ -395,7 +395,7 @@ export function ComicReader({
       }`}
     >
       {/* Top Floating Mini Bar */}
-      <div className="absolute top-3 right-4 z-30 flex items-center gap-2 bg-[#121218]/90 backdrop-blur-md px-3 py-1.5 rounded-full border border-[#20202e] shadow-comic-sm">
+      <div className="absolute top-2.5 right-2.5 sm:top-3 sm:right-4 z-30 flex items-center gap-1.5 sm:gap-2 bg-[#121218]/90 backdrop-blur-md px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full border border-[#20202e] shadow-comic-sm">
         {/* Source citation highlight pulse */}
         {highlightedPage === currentPage && (
           <div className="flex items-center gap-1 text-[11px] font-mono text-[#ffd23f] bg-[#ffd23f]/15 px-2 py-0.5 rounded-full animate-pulse border border-[#ffd23f]/30">
@@ -404,8 +404,8 @@ export function ComicReader({
           </div>
         )}
 
-        {/* Page progress badge */}
-        <span className="text-xs font-mono font-bold text-text-primary px-1">
+        {/* Page progress badge (hidden on mobile since bottom bar displays page info) */}
+        <span className="hidden sm:inline-block text-xs font-mono font-bold text-text-primary px-1">
           {currentPage} <span className="text-text-muted">/</span> {totalPages}
         </span>
 
@@ -440,7 +440,7 @@ export function ComicReader({
 
       {/* Main Comic Canvas with Progressive Two-Stage Rendering */}
       <div
-        className="relative flex-1 flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-hidden touch-pan-y"
+        className="relative flex-1 flex items-center justify-center p-0 sm:p-2 md:p-4 overflow-hidden touch-pan-y w-full h-full"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -536,7 +536,7 @@ export function ComicReader({
                         decoding="async"
                         onLoad={() => setThumbLoaded(true)}
                         onError={handleDirectThumbError}
-                        className={`max-h-[calc(100vh-6.5rem)] w-auto object-contain mx-auto block rounded border-2 border-[#15151c] shadow-[0_10px_35px_rgba(0,0,0,0.95)] transition-opacity duration-200 ${
+                        className={`max-h-[calc(100dvh-7.5rem)] md:max-h-[calc(100vh-6.5rem)] w-auto max-w-full object-contain mx-auto block rounded-none sm:rounded-xl border-0 sm:border-2 border-[#15151c] shadow-[0_4px_30px_rgba(0,0,0,0.9)] transition-opacity duration-200 ${
                           thumbLoaded ? 'opacity-90 blur-[0.5px]' : 'opacity-0'
                         }`}
                       />
@@ -554,7 +554,7 @@ export function ComicReader({
                           setHighResLoaded(true);
                         }}
                         onError={handleDirectHighResError}
-                        className={`max-h-[calc(100vh-6.5rem)] w-auto object-contain mx-auto block rounded border-2 border-[#15151c] shadow-[0_10px_35px_rgba(0,0,0,0.95)] transition-opacity duration-300 ${
+                        className={`max-h-[calc(100dvh-7.5rem)] md:max-h-[calc(100vh-6.5rem)] w-auto max-w-full object-contain mx-auto block rounded-none sm:rounded-xl border-0 sm:border-2 border-[#15151c] shadow-[0_4px_30px_rgba(0,0,0,0.9)] transition-opacity duration-300 ${
                           highResLoaded
                             ? 'opacity-100'
                             : effectiveThumbSrc && thumbLoaded
@@ -574,9 +574,9 @@ export function ComicReader({
                   </div>
                 )}
 
-                {/* Sleek Floating Zoom & Pan Controls UI */}
+                {/* Sleek Floating Zoom & Pan Controls UI (Desktop only; touch users pinch/double-tap natively) */}
                 <div
-                  className="absolute bottom-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-1 bg-[#121218]/90 backdrop-blur-md px-2.5 py-1.5 rounded-full border border-[#20202e] shadow-comic-sm transition-all duration-200 hover:border-[#323246]"
+                  className="hidden sm:flex absolute bottom-4 left-1/2 -translate-x-1/2 z-30 items-center gap-1 bg-[#121218]/90 backdrop-blur-md px-2.5 py-1.5 rounded-full border border-[#20202e] shadow-comic-sm transition-all duration-200 hover:border-[#323246]"
                   role="toolbar"
                   aria-label="Comic Zoom Controls"
                 >
@@ -653,13 +653,13 @@ export function ComicReader({
           </div>
         ) : null}
 
-        {/* Permanently visible Previous Page navigation button */}
+        {/* Previous Page navigation button (hidden on mobile & tablet, visible on desktop) */}
         <button
           type="button"
           onClick={() => currentPage > 1 && onPageChange(currentPage - 1)}
           disabled={currentPage <= 1}
           aria-label="Previous Page"
-          className={`absolute left-3 sm:left-5 top-1/2 -translate-y-1/2 z-20 p-2.5 sm:p-3 rounded-full bg-black/85 text-[#ffd23f] border border-[#ffd23f]/40 shadow-comic-sm transition-opacity cursor-pointer ${
+          className={`hidden lg:flex items-center justify-center absolute left-3 sm:left-5 top-1/2 -translate-y-1/2 z-20 p-2.5 sm:p-3 rounded-full bg-black/85 text-[#ffd23f] border border-[#ffd23f]/40 shadow-comic-sm transition-opacity cursor-pointer ${
             currentPage <= 1
               ? 'opacity-20 cursor-not-allowed pointer-events-none'
               : 'opacity-50 hover:opacity-100'
@@ -668,13 +668,13 @@ export function ComicReader({
           <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3]" />
         </button>
 
-        {/* Permanently visible Next Page navigation button */}
+        {/* Next Page navigation button (hidden on mobile & tablet, visible on desktop) */}
         <button
           type="button"
           onClick={() => currentPage < totalPages && onPageChange(currentPage + 1)}
           disabled={currentPage >= totalPages}
           aria-label="Next Page"
-          className={`absolute right-3 sm:right-5 top-1/2 -translate-y-1/2 z-20 p-2.5 sm:p-3 rounded-full bg-black/85 text-[#ffd23f] border border-[#ffd23f]/40 shadow-comic-sm transition-opacity cursor-pointer ${
+          className={`hidden lg:flex items-center justify-center absolute right-3 sm:right-5 top-1/2 -translate-y-1/2 z-20 p-2.5 sm:p-3 rounded-full bg-black/85 text-[#ffd23f] border border-[#ffd23f]/40 shadow-comic-sm transition-opacity cursor-pointer ${
             currentPage >= totalPages
               ? 'opacity-20 cursor-not-allowed pointer-events-none'
               : 'opacity-50 hover:opacity-100'

@@ -47,14 +47,14 @@ export function ReaderToolbar({
           <span className="hidden sm:inline uppercase tracking-wider font-mono text-[11px]">Vault</span>
         </Link>
 
-        <div className="w-px h-4 bg-[#23232e] mx-0.5" />
+        <div className="hidden md:block w-px h-4 bg-[#23232e] mx-0.5" />
 
-        {/* Toggle Page Rail Sidebar */}
+        {/* Toggle Page Rail Sidebar (Desktop only, mobile uses bottom bar) */}
         <button
           onClick={onToggleSidebar}
           aria-label={sidebarOpen ? 'Hide Page Rail' : 'Show Page Rail'}
           title={sidebarOpen ? 'Hide Page Rail' : 'Show Page Rail'}
-          className={`p-1.5 rounded-lg transition-all border cursor-pointer ${
+          className={`hidden md:flex p-1.5 rounded-lg transition-all border cursor-pointer ${
             sidebarOpen
               ? 'bg-[#ffd23f]/15 border-[#ffd23f]/40 text-[#ffd23f]'
               : 'text-text-muted hover:text-text-primary hover:bg-[#1d1d26] border-transparent'
@@ -63,13 +63,13 @@ export function ReaderToolbar({
           <PanelLeft className="w-4 h-4" />
         </button>
 
-        {/* Comic Title & Issue Format Badge */}
-        <div className="flex items-center gap-2 min-w-0 pl-1">
+        {/* Comic Title & Format Badge */}
+        <div className="flex items-center gap-2 min-w-0 pl-0.5 sm:pl-1 flex-1 sm:flex-initial">
           <span className="text-[10px] font-mono uppercase tracking-widest text-[#ffd23f] hidden md:inline">
             Reading:
           </span>
           <h1
-            className="text-xs sm:text-sm font-semibold text-text-primary truncate max-w-[160px] sm:max-w-[240px] md:max-w-xs"
+            className="text-xs sm:text-sm font-semibold text-text-primary truncate max-w-[200px] sm:max-w-[280px] md:max-w-md"
             title={name}
           >
             {name}
@@ -86,8 +86,8 @@ export function ReaderToolbar({
         </div>
       </div>
 
-      {/* Center section: Page Navigation Arrows */}
-      <div className="flex items-center gap-1">
+      {/* Center section: Page Navigation Arrows (tablet/desktop) */}
+      <div className="hidden sm:flex items-center gap-1">
         <button
           onClick={onPrev}
           disabled={!canPrev}
@@ -107,8 +107,8 @@ export function ReaderToolbar({
         </button>
       </div>
 
-      {/* Right section: AI Companion Toggle */}
-      <div className="flex items-center gap-2">
+      {/* Right section: AI Companion Toggle (desktop; mobile uses bottom action bar) */}
+      <div className="hidden md:flex items-center gap-2">
         <button
           onClick={onToggleAI}
           aria-label={aiOpen ? 'Hide Comic Companion' : 'Open Comic Companion'}
