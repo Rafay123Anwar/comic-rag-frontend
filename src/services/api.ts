@@ -9,7 +9,18 @@ import axios from 'axios';
  * Centralized Base URL for backend API requests.
  * Sourced from VITE_API_BASE_URL, trimmed of trailing slashes.
  */
-export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://13.218.185.215:8000').replace(/\/+$/, '');
+const rawBaseUrl = import.meta.env.VITE_API_BASE_URL;
+
+function resolveApiBaseUrl(): string {
+  // If the app is served over HTTPS (e.g. Vercel) but the backend URL is insecure HTTP,
+  // browsers block calls due to Mixed Content. Use relative path so vercel.json rewrites can proxy.
+  if (typeof window !== 'undefined' && window.location.protocol === 'https:' && rawBaseUrl?.startsWith('http://')) {
+    return '';
+  }
+  return (rawBaseUrl ?? (import.meta.env.PROD ? '' : 'http://127.0.0.1:8000')).replace(/\/+$/, '');
+}
+
+export const API_BASE_URL = resolveApiBaseUrl();
 
 /**
  * Checks whether an image URL is an external public CDN URL (e.g. Supabase, S3, Cloudinary)

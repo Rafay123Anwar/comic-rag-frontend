@@ -1,0 +1,47 @@
+{
+  "rewrites": [
+    {
+      "source": "/auth/:path*",
+      "destination": "http://13.218.185.215:8000/auth/:path*"
+    },
+    {
+      "source": "/conversations/:path*",
+      "destination": "http://13.218.185.215:8000/conversations/:path*"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "http://13.218.185.215:8000/api/:path*"
+    },
+    {
+      "source": "/comics/upload",
+      "destination": "http://13.218.185.215:8000/comics/upload"
+    },
+    {
+      "source": "/comics/:comicId/pages/:pageNumber",
+      "destination": "http://13.218.185.215:8000/comics/:comicId/pages/:pageNumber"
+    },
+    {
+      "source": "/comics/:comicId/conversation",
+      "destination": "http://13.218.185.215:8000/comics/:comicId/conversation"
+    },
+    {
+      "source": "/comics",
+      "destination": "http://13.218.185.215:8000/comics"
+    },
+    {
+      "source": "/comics/:comicId",
+      "has": [
+        {
+          "type": "header",
+          "key": "accept",
+          "value": ".*application/json.*"
+        }
+      ],
+      "destination": "http://13.218.185.215:8000/comics/:comicId"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
