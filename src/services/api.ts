@@ -9,7 +9,7 @@ import axios from 'axios';
  * Centralized Base URL for backend API requests.
  * Sourced from VITE_API_BASE_URL, trimmed of trailing slashes.
  */
-export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000').replace(/\/+$/, '');
+export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://13.218.185.215:8000').replace(/\/+$/, '');
 
 /**
  * Checks whether an image URL is an external public CDN URL (e.g. Supabase, S3, Cloudinary)
