@@ -1,4 +1,4 @@
-import { BookOpen, Library, LogIn, LogOut, Menu, Plus, User as UserIcon } from 'lucide-react';
+import { BookOpen, Library, LogIn, LogOut, Menu, User as UserIcon } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -77,14 +77,6 @@ export function AppHeader({ showMenuButton = false }: AppHeaderProps) {
 
       {/* Right Actions */}
       <div className="flex items-center gap-2.5">
-        <Link
-          to="/library"
-          className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#ffd23f] hover:bg-[#e6bd35] text-black text-xs font-bold uppercase tracking-wider rounded-lg transition-all shadow-comic-sm border border-black comic-btn-tactile"
-        >
-          <Plus className="w-3.5 h-3.5 stroke-[3]" aria-hidden="true" />
-          <span>Add Issue</span>
-        </Link>
-
         {isAuthenticated && user ? (
           <div className="flex items-center gap-2 pl-2 border-l border-[#262632]">
             <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#191924] border border-[#2b2b3c] text-xs font-mono text-text-secondary">

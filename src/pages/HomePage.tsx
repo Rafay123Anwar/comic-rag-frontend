@@ -25,7 +25,7 @@ const features = [
     icon: <Layers className="w-5 h-5" />,
     badge: 'FORMATS',
     title: 'Multi-Format Vault Support',
-    description: 'Ingest CBR, CBZ, PDF, and high-resolution standalone image issues effortlessly.',
+    description: 'Ingest CBR, CBZ, PDF, and high-resolution standalone comic files effortlessly.',
   },
 ];
 
@@ -73,7 +73,7 @@ export default function HomePage() {
               to="/library"
               className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#171722] hover:bg-[#20202e] border-2 border-black text-white font-comic text-base tracking-wider uppercase px-8 py-3.5 rounded-xl shadow-comic-sm transition-all comic-btn-tactile"
             >
-              ADD NEW ISSUE
+              UPLOAD COMIC
             </Link>
           </div>
         </div>

@@ -232,7 +232,7 @@ export function UploadDropzone({ onSuccess, compact = false }: UploadDropzonePro
 
             <div>
               <p className="font-comic text-lg text-white tracking-wider uppercase">
-                {dragActive ? 'DROP TO INGEST ISSUE' : 'DROP YOUR COMIC HERE'}
+                {dragActive ? 'DROP TO INGEST COMIC' : 'DROP YOUR COMIC HERE'}
               </p>
               <p className="text-xs text-text-muted mt-1">or click to browse local files</p>
               <div className="flex flex-wrap items-center justify-center gap-1.5 mt-3">
@@ -325,7 +325,7 @@ export function UploadDropzone({ onSuccess, compact = false }: UploadDropzonePro
             ) : (
               <>
                 <CloudUpload className="w-4 h-4 stroke-[3]" aria-hidden="true" />
-                INGEST &amp; ANALYZE ISSUE
+                INGEST &amp; ANALYZE COMIC
               </>
             )}
           </button>

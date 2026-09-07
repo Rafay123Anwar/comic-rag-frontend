@@ -192,7 +192,7 @@ export default function LibraryPage() {
             className="flex items-center justify-center gap-2 bg-[#ffd23f] hover:bg-[#e6bd35] text-black font-comic text-sm font-bold uppercase tracking-wider px-5 py-2.5 rounded-xl shadow-comic border-2 border-black transition-all comic-btn-tactile shrink-0 cursor-pointer"
           >
             <Plus className="w-4 h-4 stroke-[3]" aria-hidden="true" />
-            <span>ADD NEW ISSUE</span>
+            <span>UPLOAD COMIC</span>
           </button>
         </div>
 
@@ -244,7 +244,7 @@ export default function LibraryPage() {
         ) : filtered.length === 0 ? (
           <div className="py-16 text-center">
             <p className="font-comic text-xl text-text-muted uppercase tracking-wider">
-              NO ISSUES FOUND FOR "{search}"
+              NO COMICS FOUND FOR "{search}"
             </p>
           </div>
         ) : (
@@ -253,7 +253,7 @@ export default function LibraryPage() {
       </main>
 
       {/* Upload Modal */}
-      <Modal open={uploadOpen} onClose={() => setUploadOpen(false)} title="ADD NEW COMIC ISSUE">
+      <Modal open={uploadOpen} onClose={() => setUploadOpen(false)} title="UPLOAD NEW COMIC">
         <UploadDropzone onSuccess={() => setUploadOpen(false)} />
       </Modal>
     </div>

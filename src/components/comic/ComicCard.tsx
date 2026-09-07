@@ -60,7 +60,7 @@ export function ComicCard({ comic, onDelete, isDeleting = false }: ComicCardProp
           <div className="w-full h-full bg-[#f3e7cf] text-[#121216] bg-halftone-paper p-4 flex flex-col justify-between">
             <div className="flex items-center justify-between">
               <span className="font-comic text-xs uppercase bg-black text-[#ffd23f] px-2 py-0.5 rounded shadow-sm">
-                ISSUE #{comic.comic_id.slice(0, 4).toUpperCase()}
+                COMIC #{comic.comic_id.slice(0, 4).toUpperCase()}
               </span>
               <span className="font-mono text-[10px] font-bold uppercase text-black/70">
                 {comic.source_format}
@@ -157,7 +157,7 @@ export function ComicCard({ comic, onDelete, isDeleting = false }: ComicCardProp
               }}
               disabled={isDeleting}
               aria-label={`Remove ${comic.title} from vault`}
-              title={isDeleting ? 'Deleting issue…' : 'Remove from vault'}
+              title={isDeleting ? 'Deleting comic…' : 'Remove from vault'}
               className="p-2 rounded-xl text-text-muted hover:text-[#ff2e63] hover:bg-[#ff2e63]/10 border border-transparent hover:border-[#ff2e63]/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center cursor-pointer"
             >
               {isDeleting ? (

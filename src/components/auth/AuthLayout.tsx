@@ -82,7 +82,7 @@ export function AuthLayout({ children, title, subtitle, badgeText }: AuthLayoutP
                 ENTER THE <span className="text-[#ffd23f]">STORYVERSE.</span>
               </h2>
               <p className="text-xs xl:text-sm text-text-secondary leading-relaxed mb-8">
-                Upload your comic issues, query character arcs, inspect panels, and chat with an AI companion that truly understands graphic storytelling.
+                Upload your comics, query character arcs, inspect panels, and chat with an AI companion that truly understands graphic storytelling.
               </p>
 
               {/* Feature Highlights */}

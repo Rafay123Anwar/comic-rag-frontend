@@ -60,6 +60,8 @@ export function ComicReader({
 
   const readerContainerRef = useRef<HTMLDivElement | null>(null);
   const transformComponentRef = useRef<ReactZoomPanPinchRef | null>(null);
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
 
   const comicId = getComicId(comic);
   const totalPages = getComicTotalPages(comic);
@@ -151,32 +153,116 @@ export function ComicReader({
 
   // Mobile Touch Swipe Handling
   const handleTouchStart = (e: React.TouchEvent) => {
-    setTouchEnd(null);
-    setTouchStart(e.targetTouches[0].clientX);
+    if (e.targetTouches.length === 1) {
+      const clientX = e.targetTouches[0].clientX;
+      const clientY = e.targetTouches[0].clientY;
+      touchStartX.current = clientX;
+      touchStartY.current = clientY;
+      setTouchStart(clientX);
+      setTouchEnd(null);
+    }
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    setTouchEnd(e.targetTouches[0].clientX);
+    if (e.targetTouches.length === 1) {
+      setTouchEnd(e.targetTouches[0].clientX);
+    }
   };
 
-  const handleTouchEnd = () => {
-    if (touchStart === null || touchEnd === null) return;
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const startX = touchStartX.current ?? touchStart;
+    if (startX === null) return;
+    const endX = e.changedTouches?.[0]?.clientX ?? touchEnd;
+    if (endX === null || endX === undefined) return;
+
     // When zoomed in, preserve zoom pan interactions instead of swiping pages
-    if (currentScale > 1.05) return;
-
-    const diff = touchStart - touchEnd;
-    const isLeftSwipe = diff > 50;
-    const isRightSwipe = diff < -50;
-
-    if (isLeftSwipe && currentPage < totalPages) {
-      onPageChange(currentPage + 1);
-    } else if (isRightSwipe && currentPage > 1) {
-      onPageChange(currentPage - 1);
+    if (currentScale > 1.05) {
+      touchStartX.current = null;
+      touchStartY.current = null;
+      return;
     }
 
+    const startY = touchStartY.current ?? 0;
+    const endY = e.changedTouches?.[0]?.clientY ?? 0;
+    const diffX = startX - endX;
+    const diffY = startY - endY;
+
+    // Only swipe if horizontal drag dominates vertical drag
+    if (Math.abs(diffX) > Math.abs(diffY)) {
+      if (diffX > 50 && currentPage < totalPages) {
+        onPageChange(currentPage + 1);
+      } else if (diffX < -50 && currentPage > 1) {
+        onPageChange(currentPage - 1);
+      }
+    }
+
+    touchStartX.current = null;
+    touchStartY.current = null;
     setTouchStart(null);
     setTouchEnd(null);
   };
+
+  // Native touch listener on container to catch gestures reliably on mobile devices
+  useEffect(() => {
+    const container = readerContainerRef.current;
+    if (!container) return;
+
+    let nativeStartX: number | null = null;
+    let nativeStartY: number | null = null;
+
+    const onNativeTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        nativeStartX = e.touches[0].clientX;
+        nativeStartY = e.touches[0].clientY;
+        touchStartX.current = nativeStartX;
+        touchStartY.current = nativeStartY;
+        setTouchStart(nativeStartX);
+        setTouchEnd(null);
+      }
+    };
+
+    const onNativeTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        setTouchEnd(e.touches[0].clientX);
+      }
+    };
+
+    const onNativeTouchEnd = (e: TouchEvent) => {
+      if (nativeStartX === null) return;
+      if (e.changedTouches.length > 0) {
+        const endX = e.changedTouches[0].clientX;
+        const endY = e.changedTouches[0].clientY;
+        setTouchEnd(endX);
+
+        if (currentScale <= 1.05) {
+          const diffX = nativeStartX - endX;
+          const diffY = (nativeStartY ?? endY) - endY;
+
+          if (Math.abs(diffX) > Math.abs(diffY)) {
+            if (diffX > 50 && currentPage < totalPages) {
+              onPageChange(currentPage + 1);
+            } else if (diffX < -50 && currentPage > 1) {
+              onPageChange(currentPage - 1);
+            }
+          }
+        }
+      }
+      nativeStartX = null;
+      nativeStartY = null;
+      touchStartX.current = null;
+      touchStartY.current = null;
+    };
+
+    container.addEventListener('touchstart', onNativeTouchStart, { passive: true });
+    container.addEventListener('touchmove', onNativeTouchMove, { passive: true });
+    container.addEventListener('touchend', onNativeTouchEnd, { passive: true });
+
+    return () => {
+      container.removeEventListener('touchstart', onNativeTouchStart);
+      container.removeEventListener('touchmove', onNativeTouchMove);
+      container.removeEventListener('touchend', onNativeTouchEnd);
+    };
+  }, [currentScale, currentPage, totalPages, onPageChange]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -414,7 +500,7 @@ export function ComicReader({
               animationTime: 250,
             }}
             panning={{
-              disabled: false,
+              disabled: currentScale <= 1.02,
               velocityDisabled: false,
             }}
             wheel={{
