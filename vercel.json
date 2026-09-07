@@ -17,12 +17,20 @@
       "destination": "http://13.218.185.215:8000/comics/upload"
     },
     {
-      "source": "/comics/:comicId/pages/:pageNumber",
-      "destination": "http://13.218.185.215:8000/comics/:comicId/pages/:pageNumber"
+      "source": "/comics/:comicId/pages/:path*",
+      "destination": "http://13.218.185.215:8000/comics/:comicId/pages/:path*"
+    },
+    {
+      "source": "/comics/:comicId/conversation/:path*",
+      "destination": "http://13.218.185.215:8000/comics/:comicId/conversation/:path*"
     },
     {
       "source": "/comics/:comicId/conversation",
       "destination": "http://13.218.185.215:8000/comics/:comicId/conversation"
+    },
+    {
+      "source": "/comics/:comicId/ask",
+      "destination": "http://13.218.185.215:8000/comics/:comicId/ask"
     },
     {
       "source": "/comics",
