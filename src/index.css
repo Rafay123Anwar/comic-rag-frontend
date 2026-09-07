@@ -1,0 +1,176 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Base Reset & Comic Design System ────────────────────────────── */
+@layer base {
+  :root {
+    --ink: #0d0d10;
+    --ink-dark: #08080a;
+    --panel: #17171c;
+    --panel-2: #1d1d24;
+    --paper: #f3e7cf;
+    --yellow: #ffd23f;
+    --pink: #ff2e63;
+    --cyan: #08d9d6;
+    --muted: #8b8896;
+    --border: #23232c;
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+    background-color: var(--ink-dark);
+    color: #f3f3f6;
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    background-color: #08080a;
+    color: #f3f3f6;
+    min-height: 100dvh;
+    overflow-x: hidden;
+  }
+
+  /* Custom Ink Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0d0d10;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #23232c;
+    border-radius: 4px;
+    border: 1px solid #141418;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #343440;
+  }
+
+  /* Focus outline */
+  :focus-visible {
+    outline: 2px solid var(--yellow);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Selection */
+  ::selection {
+    background: rgba(255, 210, 63, 0.3);
+    color: #ffffff;
+  }
+}
+
+/* ─── Comic Reader Utilities ────────────────────────────────────────── */
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .no-overflow-x {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+
+  /* Comic Display Font */
+  .font-comic {
+    font-family: 'Bangers', cursive, sans-serif;
+    letter-spacing: 0.05em;
+  }
+
+  /* Subtle Halftone Dot Pattern */
+  .bg-halftone {
+    background-image: radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+    background-size: 12px 12px;
+  }
+
+  .bg-halftone-paper {
+    background-image: radial-gradient(rgba(0, 0, 0, 0.06) 1px, transparent 1px);
+    background-size: 8px 8px;
+  }
+
+  .bg-halftone-yellow {
+    background-image: radial-gradient(rgba(255, 210, 63, 0.1) 1px, transparent 1px);
+    background-size: 10px 10px;
+  }
+
+  /* Comic Reading Canvas Atmosphere */
+  .bg-reading-room {
+    background: radial-gradient(ellipse at center, #181822 0%, #0d0d10 60%, #08080a 100%);
+  }
+
+  /* Comic Physical Tactile Button Press */
+  .comic-btn-tactile {
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+  }
+  .comic-btn-tactile:active {
+    transform: translate(2px, 2px);
+    box-shadow: 0px 0px 0px #000000 !important;
+  }
+
+  /* Speech Bubble Tails */
+  .speech-tail-left {
+    position: relative;
+  }
+  .speech-tail-left::before {
+    content: '';
+    position: absolute;
+    bottom: -6px;
+    left: 12px;
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 6px solid var(--paper);
+  }
+
+  .speech-tail-right {
+    position: relative;
+  }
+  .speech-tail-right::before {
+    content: '';
+    position: absolute;
+    bottom: -6px;
+    right: 12px;
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 6px solid #1a2a34;
+  }
+
+  /* Comic Panel Outlines */
+  .comic-panel-border {
+    border: 2px solid #121216;
+    box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.8);
+  }
+
+  .comic-panel-border-yellow {
+    border: 2px solid #ffd23f;
+    box-shadow: 3px 3px 0px #000000;
+  }
+
+  /* Comic Shake Animation */
+  .animate-shake {
+    animation: shake 0.35s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+  }
+
+  @keyframes shake {
+    10%, 90% { transform: translate3d(-1px, 0, 0); }
+    20%, 80% { transform: translate3d(2px, 0, 0); }
+    30%, 50%, 70% { transform: translate3d(-3px, 0, 0); }
+    40%, 60% { transform: translate3d(3px, 0, 0); }
+  }
+}
+
