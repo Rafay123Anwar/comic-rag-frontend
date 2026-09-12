@@ -24,6 +24,7 @@ export interface AuthenticatedThumbnailProps {
   pageNumber: number;
   className?: string;
   alt?: string;
+  onSignedUrlExpired?: () => void;
 }
 
 export const AuthenticatedThumbnail = memo(function AuthenticatedThumbnail({
@@ -32,42 +33,30 @@ export const AuthenticatedThumbnail = memo(function AuthenticatedThumbnail({
   pageNumber,
   className = 'w-full h-full object-cover group-hover:scale-105 transition-transform duration-200',
   alt,
+  onSignedUrlExpired,
 }: AuthenticatedThumbnailProps) {
   const isDirect = isDirectImageUrl(directUrl);
-  const cachedUrl = !isDirect && comicId && pageNumber ? getCachedImageUrl(comicId, pageNumber, true) : null;
-  const initialSrc = isDirect ? (directUrl ?? null) : cachedUrl;
+  const [directError, setDirectError] = useState(false);
+  const [authThumbError, setAuthThumbError] = useState(false);
+  const [authFullError, setAuthFullError] = useState(false);
+  const [authBlobUrl, setAuthBlobUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  const [imgSrc, setImgSrc] = useState<string | null>(initialSrc);
-  const [loading, setLoading] = useState(!initialSrc);
+  // Reset direct error state if directUrl changes (e.g. fresh signed URL from polling)
+  const prevDirectUrlRef = useRef<string | null | undefined>(directUrl);
+  useEffect(() => {
+    if (prevDirectUrlRef.current !== directUrl) {
+      prevDirectUrlRef.current = directUrl;
+      setDirectError(false);
+      setAuthThumbError(false);
+      setAuthFullError(false);
+    }
+  }, [directUrl]);
+
+  const canUseDirect = isDirect && Boolean(directUrl) && !directError;
 
   useEffect(() => {
-    // 1. If imgSrc is already a valid blob URL or data URL, do NOT run fetch again!
-    if (imgSrc && (imgSrc.startsWith('blob:') || imgSrc.startsWith('data:'))) {
-      setLoading(false);
-      return;
-    }
-
-    // 2. If direct CDN URL is provided, use it directly without re-fetching
-    if (isDirect && directUrl) {
-      if (imgSrc !== directUrl) {
-        setImgSrc(directUrl);
-      }
-      setLoading(false);
-      return;
-    }
-
-    // 3. Check memory cache first
-    const memoryCached = comicId && pageNumber ? getCachedImageUrl(comicId, pageNumber, true) : null;
-    if (memoryCached) {
-      if (imgSrc !== memoryCached) {
-        setImgSrc(memoryCached);
-      }
-      setLoading(false);
-      return;
-    }
-
-    // 4. If already populated, do not re-fetch
-    if (imgSrc) {
+    if (canUseDirect) {
       setLoading(false);
       return;
     }
@@ -77,45 +66,115 @@ export const AuthenticatedThumbnail = memo(function AuthenticatedThumbnail({
       return;
     }
 
+    // Check in-memory image cache first
+    const cachedThumb = getCachedImageUrl(comicId, pageNumber, true);
+    if (cachedThumb && !authThumbError) {
+      setAuthBlobUrl(cachedThumb);
+      setLoading(false);
+      return;
+    }
+
+    const cachedFull = getCachedImageUrl(comicId, pageNumber, false);
+    if (cachedFull && !authFullError) {
+      setAuthBlobUrl(cachedFull);
+      setLoading(false);
+      return;
+    }
+
     let isMounted = true;
     setLoading(true);
 
-    getAuthenticatedImageUrl(comicId, pageNumber, true)
-      .then((objectUrl) => {
-        if (isMounted) {
-          setImgSrc(objectUrl);
-          setLoading(false);
-        }
-      })
-      .catch((error) => {
-        console.error('Sidebar Thumb Error:', error);
-        if (isMounted) setLoading(false);
-      });
+    if (!authThumbError) {
+      getAuthenticatedImageUrl(comicId, pageNumber, true)
+        .then((url) => {
+          if (isMounted) {
+            setAuthBlobUrl(url);
+            setLoading(false);
+          }
+        })
+        .catch(() => {
+          if (isMounted) {
+            setAuthThumbError(true);
+            // Fallback to full page image if thumbnail fails
+            getAuthenticatedImageUrl(comicId, pageNumber, false)
+              .then((fullUrl) => {
+                if (isMounted) {
+                  setAuthBlobUrl(fullUrl);
+                  setLoading(false);
+                }
+              })
+              .catch(() => {
+                if (isMounted) {
+                  setAuthFullError(true);
+                  setLoading(false);
+                }
+              });
+          }
+        });
+    } else if (!authFullError) {
+      getAuthenticatedImageUrl(comicId, pageNumber, false)
+        .then((fullUrl) => {
+          if (isMounted) {
+            setAuthBlobUrl(fullUrl);
+            setLoading(false);
+          }
+        })
+        .catch(() => {
+          if (isMounted) {
+            setAuthFullError(true);
+            setLoading(false);
+          }
+        });
+    } else {
+      setLoading(false);
+    }
 
     return () => {
       isMounted = false;
     };
-  }, [directUrl, isDirect, comicId, pageNumber, imgSrc]);
+  }, [comicId, pageNumber, canUseDirect, authThumbError, authFullError]);
 
-  if (loading) {
+  const handleImgError = () => {
+    if (canUseDirect) {
+      setDirectError(true);
+      onSignedUrlExpired?.();
+    } else if (authBlobUrl && !authFullError) {
+      setAuthThumbError(true);
+    } else {
+      setAuthFullError(true);
+    }
+  };
+
+  const activeSrc = canUseDirect ? directUrl! : authBlobUrl;
+  const isFailed = !activeSrc || (directError && authThumbError && authFullError);
+
+  if (loading && !activeSrc) {
     return (
-      <div className="w-full h-full bg-[#161622] flex items-center justify-center animate-pulse">
-        <FileText className="w-4 h-4 text-[#ffd23f]/50 animate-bounce" />
+      <div className="w-full h-full bg-[#161622] flex flex-col items-center justify-center animate-pulse">
+        <FileText className="w-3.5 h-3.5 text-[#ffd23f]/50 animate-bounce" />
       </div>
     );
   }
 
-  if (!imgSrc) {
-    return <FileText className="w-4 h-4 text-text-muted opacity-40" />;
+  if (isFailed) {
+    return (
+      <div className="w-full h-full bg-[#14141c] flex flex-col items-center justify-center p-1 text-center border border-[#22222d] select-none">
+        <BookOpen className="w-3.5 h-3.5 text-[#ffd23f]/40 mb-0.5" />
+        <span className="text-[8.5px] font-mono font-bold text-[#ffd23f]/60 leading-none">
+          P.{pageNumber}
+        </span>
+      </div>
+    );
   }
 
   return (
     <img
-      src={imgSrc}
-      alt={alt || `Page ${pageNumber} thumbnail`}
+      src={activeSrc}
+      alt={alt || `Page ${pageNumber}`}
       className={className}
       loading="lazy"
       decoding="async"
+      onError={handleImgError}
     />
   );
 });
@@ -137,6 +196,7 @@ export const PageThumbnailItem = memo(function PageThumbnailItem({
   page,
   onSelect,
   activeThumbnailRef,
+  onSignedUrlExpired,
 }: PageThumbnailItemProps) {
   const isProcessing = page.status === 'processing';
 
@@ -168,6 +228,7 @@ export const PageThumbnailItem = memo(function PageThumbnailItem({
           directUrl={page.thumbnail_url || page.image_url}
           comicId={comicId}
           pageNumber={pageNum}
+          onSignedUrlExpired={onSignedUrlExpired}
         />
 
         {/* Non-blocking subtle AI analyzing indicator dot on the thumbnail */}
