@@ -7,11 +7,48 @@ import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { PublicOnlyRoute } from './components/auth/PublicOnlyRoute';
 import { useAuthStore } from './stores/authStore';
 
-const HomePage = lazy(() => import('./pages/HomePage'));
-const LibraryPage = lazy(() => import('./pages/LibraryPage'));
-const ReaderPage = lazy(() => import('./pages/ReaderPage'));
-const LoginPage = lazy(() => import('./pages/LoginPage'));
-const SignupPage = lazy(() => import('./pages/SignupPage'));
+import type { ComponentType } from 'react';
+
+/**
+ * Handles stale dynamic import chunk errors across deployments.
+ * If a user has an older tab open and navigates to a newly hashed route,
+ * auto-reloads once to fetch the fresh bundle.
+ */
+function lazyWithRetry<T extends ComponentType<unknown>>(
+  factory: () => Promise<{ default: T }>
+) {
+  return lazy(async () => {
+    const hasReloaded = typeof window !== 'undefined' ? sessionStorage.getItem('chunk_reload_retry') : null;
+
+    try {
+      const component = await factory();
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('chunk_reload_retry');
+      }
+      return component;
+    } catch (error: unknown) {
+      const errStr = (error instanceof Error ? error.message : String(error)).toLowerCase();
+      const isChunkError =
+        errStr.includes('dynamically imported module') ||
+        errStr.includes('module script') ||
+        errStr.includes('mime type') ||
+        errStr.includes('text/html');
+
+      if (isChunkError && !hasReloaded && typeof window !== 'undefined') {
+        sessionStorage.setItem('chunk_reload_retry', 'true');
+        window.location.reload();
+        return { default: (() => null) as unknown as T };
+      }
+      throw error;
+    }
+  });
+}
+
+const HomePage = lazyWithRetry(() => import('./pages/HomePage'));
+const LibraryPage = lazyWithRetry(() => import('./pages/LibraryPage'));
+const ReaderPage = lazyWithRetry(() => import('./pages/ReaderPage'));
+const LoginPage = lazyWithRetry(() => import('./pages/LoginPage'));
+const SignupPage = lazyWithRetry(() => import('./pages/SignupPage'));
 
 function PageFallback() {
   return (

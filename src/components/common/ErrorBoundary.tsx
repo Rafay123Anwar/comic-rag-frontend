@@ -37,6 +37,21 @@ export class ErrorBoundary extends Component<Props, State> {
       errorStr.includes('unauthorized') ||
       errorStr.includes('session has expired');
 
+    const isChunkError =
+      errorStr.includes('dynamically imported module') ||
+      errorStr.includes('module script') ||
+      errorStr.includes('mime type') ||
+      errorStr.includes('text/html');
+
+    if (isChunkError) {
+      const hasRetried = typeof window !== 'undefined' ? sessionStorage.getItem('chunk_reload_retry') : null;
+      if (!hasRetried && typeof window !== 'undefined') {
+        sessionStorage.setItem('chunk_reload_retry', 'true');
+        window.location.reload();
+        return;
+      }
+    }
+
     if (is401) {
       localStorage.removeItem('auth_token');
       try {
@@ -53,9 +68,22 @@ export class ErrorBoundary extends Component<Props, State> {
     this.setState({ hasError: false, error: null });
   };
 
+  private handleReload = () => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.removeItem('chunk_reload_retry');
+      window.location.reload();
+    }
+  };
+
   public render() {
     if (this.state.hasError) {
       const errorStr = (this.state.error?.message || '').toLowerCase();
+      const isChunkError =
+        errorStr.includes('dynamically imported module') ||
+        errorStr.includes('module script') ||
+        errorStr.includes('mime type') ||
+        errorStr.includes('text/html');
+
       const is401 =
         errorStr.includes('401') ||
         errorStr.includes('unauthorized') ||
@@ -67,31 +95,49 @@ export class ErrorBoundary extends Component<Props, State> {
             <AlertCircle className="w-6 h-6 text-red-400" />
           </div>
           <h2 className="text-base font-semibold text-text-primary mb-1">
-            {is401 ? 'Session Expired' : (this.props.fallbackTitle || 'Rendering Error')}
+            {isChunkError
+              ? 'New Update Available'
+              : is401
+              ? 'Session Expired'
+              : (this.props.fallbackTitle || 'Rendering Error')}
           </h2>
           <p className="text-xs text-text-muted max-w-md mb-6 leading-relaxed">
-            {is401
+            {isChunkError
+              ? 'A new version of Comic RAG has been deployed. Please reload the page to load the updated application.'
+              : is401
               ? 'Your session has expired or you are unauthenticated. Please log in again.'
               : (this.state.error?.message ||
                 this.props.fallbackMessage ||
                 'A rendering error occurred while displaying this content.')}
           </p>
           <div className="flex items-center gap-3">
-            {!is401 && (
+            {isChunkError ? (
               <button
-                onClick={this.handleReset}
+                onClick={this.handleReload}
                 className="flex items-center gap-1.5 px-4 py-2 bg-accent hover:bg-accent-hover text-white text-xs font-medium rounded-xl transition-colors cursor-pointer"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
-                Try again
+                Reload Page
               </button>
+            ) : (
+              <>
+                {!is401 && (
+                  <button
+                    onClick={this.handleReset}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-accent hover:bg-accent-hover text-white text-xs font-medium rounded-xl transition-colors cursor-pointer"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Try again
+                  </button>
+                )}
+                <a
+                  href="/login"
+                  className="px-4 py-2 bg-base-elevated hover:bg-base-border text-text-secondary hover:text-text-primary text-xs font-medium rounded-xl transition-colors border border-base-border cursor-pointer"
+                >
+                  Go to Login
+                </a>
+              </>
             )}
-            <a
-              href="/login"
-              className="px-4 py-2 bg-base-elevated hover:bg-base-border text-text-secondary hover:text-text-primary text-xs font-medium rounded-xl transition-colors border border-base-border cursor-pointer"
-            >
-              Go to Login
-            </a>
           </div>
         </div>
       );
