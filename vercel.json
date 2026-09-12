@@ -2,55 +2,55 @@
   "rewrites": [
     {
       "source": "/auth",
-      "destination": "http://13.218.185.215:8000/auth"
+      "destination": "http://145.241.119.82:8000/auth"
     },
     {
       "source": "/auth/:path*",
-      "destination": "http://13.218.185.215:8000/auth/:path*"
+      "destination": "http://145.241.119.82:8000/auth/:path*"
     },
     {
       "source": "/conversations",
-      "destination": "http://13.218.185.215:8000/conversations"
+      "destination": "http://145.241.119.82:8000/conversations"
     },
     {
       "source": "/conversations/:path*",
-      "destination": "http://13.218.185.215:8000/conversations/:path*"
+      "destination": "http://145.241.119.82:8000/conversations/:path*"
     },
     {
       "source": "/api/:path*",
-      "destination": "http://13.218.185.215:8000/api/:path*"
+      "destination": "http://145.241.119.82:8000/api/:path*"
     },
     {
       "source": "/comics/upload",
-      "destination": "http://13.218.185.215:8000/comics/upload"
+      "destination": "http://145.241.119.82:8000/comics/upload"
     },
     {
       "source": "/comics/:comicId/status",
-      "destination": "http://13.218.185.215:8000/comics/:comicId/status"
+      "destination": "http://145.241.119.82:8000/comics/:comicId/status"
     },
     {
       "source": "/comics/:comicId/conversation/:path*",
-      "destination": "http://13.218.185.215:8000/comics/:comicId/conversation/:path*"
+      "destination": "http://145.241.119.82:8000/comics/:comicId/conversation/:path*"
     },
     {
       "source": "/comics/:comicId/conversation",
-      "destination": "http://13.218.185.215:8000/comics/:comicId/conversation"
+      "destination": "http://145.241.119.82:8000/comics/:comicId/conversation"
     },
     {
       "source": "/comics/:comicId/ask",
-      "destination": "http://13.218.185.215:8000/comics/:comicId/ask"
+      "destination": "http://145.241.119.82:8000/comics/:comicId/ask"
     },
     {
       "source": "/comics/:comicId/pages/:path*",
-      "destination": "http://13.218.185.215:8000/comics/:comicId/pages/:path*"
+      "destination": "http://145.241.119.82:8000/comics/:comicId/pages/:path*"
     },
     {
       "source": "/comics",
-      "destination": "http://13.218.185.215:8000/comics"
+      "destination": "http://145.241.119.82:8000/comics"
     },
     {
       "source": "/health",
-      "destination": "http://13.218.185.215:8000/health"
+      "destination": "http://145.241.119.82:8000/health"
     },
     {
       "source": "/(.*)",
