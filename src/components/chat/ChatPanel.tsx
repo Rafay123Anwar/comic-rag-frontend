@@ -23,7 +23,7 @@ export function ChatPanel({
 }: ChatPanelProps) {
   const { messages, isLoading, conversationId, initConversation, sendQuestion } =
     useConversation();
-  const { error } = useChatStore();
+  const error = useChatStore((state) => state.error);
 
   // Initialize or restore conversation when panel mounts / comicId changes
   useEffect(() => {

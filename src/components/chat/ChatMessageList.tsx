@@ -18,14 +18,29 @@ const SUGGESTIONS = [
 ];
 
 export function ChatMessageList({ messages, isLoading, onNavigate }: ChatMessageListProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const el = containerRef.current;
+    if (!el) return;
+
+    // Only auto-scroll if the user is already near the bottom (within ~80px threshold)
+    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+
+    if (isNearBottom) {
+      if (isLoading) {
+        // Direct scroll jump during token streaming to avoid animation queue lockup
+        el.scrollTop = el.scrollHeight;
+      } else {
+        // Smooth scroll for final settle once streaming completes
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
+    }
   }, [messages, isLoading]);
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-4 min-h-0 bg-[#0d0d12]" aria-live="polite" aria-label="Chat messages">
+    <div ref={containerRef} className="flex-1 overflow-y-auto px-4 py-4 min-h-0 bg-[#0d0d12]" aria-live="polite" aria-label="Chat messages">
       {messages.length === 0 && !isLoading ? (
         /* Comic Empty State with Clickable Suggestions */
         <div className="flex flex-col items-center justify-center h-full text-center px-3 py-6 gap-4">

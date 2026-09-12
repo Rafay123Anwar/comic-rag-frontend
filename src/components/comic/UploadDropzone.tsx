@@ -53,7 +53,7 @@ export function UploadDropzone({ onSuccess, compact = false }: UploadDropzonePro
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const navigate = useNavigate();
-  const { addComic } = useComicStore();
+  const addComic = useComicStore((state) => state.addComic);
   const toast = useToast();
 
   useEffect(() => {

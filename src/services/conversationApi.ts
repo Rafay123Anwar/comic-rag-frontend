@@ -8,6 +8,7 @@ import type {
   ConversationQuestionResponse,
   ConversationResponse,
 } from '../types/conversation';
+import { clearStoredToken, getStoredToken } from '../utils/token';
 import apiClient, { API_BASE_URL } from './api';
 
 /**
@@ -110,7 +111,7 @@ export async function askInConversationStream(
     payload.current_page = currentPage;
   }
 
-  const token = localStorage.getItem('auth_token');
+  const token = getStoredToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
@@ -135,12 +136,10 @@ export async function askInConversationStream(
       errorDetail = await response.text().catch(() => '');
     }
     if (response.status === 401) {
-      localStorage.removeItem('auth_token');
-      try {
-        import('../stores/authStore').then(({ useAuthStore }) => {
-          useAuthStore.getState().logout();
-        }).catch(() => {});
-      } catch {}
+      clearStoredToken();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('auth:unauthorized'));
+      }
       if (typeof window !== 'undefined' && window.location.pathname !== '/login' && window.location.pathname !== '/signup') {
         window.location.href = '/login';
       }

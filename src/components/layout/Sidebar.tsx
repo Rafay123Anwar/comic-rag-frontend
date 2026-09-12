@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, memo } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { BookOpen, FileText } from 'lucide-react';
 import {
   type ComicDetailResponse,
@@ -284,17 +285,25 @@ export function Sidebar({
   const comicId = getComicId(comic) || (comic as { id?: string })?.id || '';
   const format = getComicFormat(comic);
   const total = getComicTotalPages(comic);
-  const activeThumbnailRef = useRef<HTMLButtonElement | null>(null);
+  const parentRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll active thumbnail into view
+  const virtualizer = useVirtualizer({
+    count: pages.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 88, // 80px button height + 8px row gap
+    overscan: 4,
+  });
+
+  // Auto-scroll active thumbnail into view with virtualizer
+  const activeIndex = pages.findIndex((p) => (p.page_number ?? 1) === currentPage);
   useEffect(() => {
-    if (activeThumbnailRef.current) {
-      activeThumbnailRef.current.scrollIntoView({
+    if (activeIndex >= 0) {
+      virtualizer.scrollToIndex(activeIndex, {
+        align: 'auto',
         behavior: 'smooth',
-        block: 'nearest',
       });
     }
-  }, [currentPage]);
+  }, [activeIndex, virtualizer]);
 
   return (
     <aside
@@ -314,30 +323,54 @@ export function Sidebar({
       </div>
 
       {/* Page Thumbnails List */}
-      <nav className="flex-1 overflow-y-auto p-2 space-y-2" aria-label="Page thumbnails">
+      <nav
+        ref={parentRef}
+        className="flex-1 overflow-y-auto p-2"
+        aria-label="Page thumbnails"
+      >
         {pages.length === 0 ? (
           <div className="py-12 text-center text-xs text-text-muted">
             <BookOpen className="w-6 h-6 mx-auto mb-2 text-[#ffd23f]/40" />
             No pages found
           </div>
         ) : (
-          pages.map((page) => {
-            const pageNum = page.page_number ?? 1;
-            const isActive = pageNum === currentPage;
+          <div
+            style={{
+              height: `${virtualizer.getTotalSize()}px`,
+              width: '100%',
+              position: 'relative',
+            }}
+          >
+            {virtualizer.getVirtualItems().map((virtualRow) => {
+              const page = pages[virtualRow.index];
+              const pageNum = page.page_number ?? virtualRow.index + 1;
+              const isActive = pageNum === currentPage;
 
-            return (
-              <PageThumbnailItem
-                key={pageNum}
-                comicId={comicId}
-                pageNum={pageNum}
-                isActive={isActive}
-                page={page}
-                onSelect={onPageSelect}
-                activeThumbnailRef={activeThumbnailRef}
-                onSignedUrlExpired={onSignedUrlExpired}
-              />
-            );
-          })
+              return (
+                <div
+                  key={virtualRow.key}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: `${virtualRow.size}px`,
+                    transform: `translateY(${virtualRow.start}px)`,
+                    paddingBottom: '8px',
+                  }}
+                >
+                  <PageThumbnailItem
+                    comicId={comicId}
+                    pageNum={pageNum}
+                    isActive={isActive}
+                    page={page}
+                    onSelect={onPageSelect}
+                    onSignedUrlExpired={onSignedUrlExpired}
+                  />
+                </div>
+              );
+            })}
+          </div>
         )}
       </nav>
 

@@ -4,6 +4,7 @@
  * Automatically injects JWT Bearer token on requests and handles 401 errors.
  */
 import axios from 'axios';
+import { clearStoredToken, getStoredToken } from '../utils/token';
 
 /**
  * Centralized Base URL for backend API requests.
@@ -69,7 +70,7 @@ const apiClient = axios.create({
 
 // Attach Bearer Token to outgoing requests
 apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('auth_token');
+  const token = getStoredToken();
   if (token && config.headers) {
     if (typeof config.headers.set === 'function') {
       config.headers.set('Authorization', `Bearer ${token}`);
@@ -98,13 +99,10 @@ apiClient.interceptors.response.use(
         error.config?.url?.includes('/auth/signup');
 
       if (!isLoginOrSignup) {
-        localStorage.removeItem('auth_token');
-        try {
-          // Asynchronously clear zustand store and caches without circular dependency
-          import('../stores/authStore').then(({ useAuthStore }) => {
-            useAuthStore.getState().logout();
-          }).catch(() => {});
-        } catch {}
+        clearStoredToken();
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('auth:unauthorized'));
+        }
 
         if (typeof window !== 'undefined' && window.location.pathname !== '/login' && window.location.pathname !== '/signup') {
           window.location.href = '/login';

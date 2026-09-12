@@ -30,19 +30,17 @@ function backendMessageToChat(msg: ConversationMessage): ChatMessage {
 }
 
 export function useConversation() {
-  const {
-    conversationId,
-    messages,
-    isLoading,
-    error,
-    setConversation,
-    setMessages,
-    addMessage,
-    updateLastAssistantMessage,
-    setLoading,
-    setError,
-    clearChat,
-  } = useChatStore();
+  const conversationId = useChatStore((state) => state.conversationId);
+  const messages = useChatStore((state) => state.messages);
+  const isLoading = useChatStore((state) => state.isLoading);
+  const error = useChatStore((state) => state.error);
+  const setConversation = useChatStore((state) => state.setConversation);
+  const setMessages = useChatStore((state) => state.setMessages);
+  const addMessage = useChatStore((state) => state.addMessage);
+  const updateLastAssistantMessage = useChatStore((state) => state.updateLastAssistantMessage);
+  const setLoading = useChatStore((state) => state.setLoading);
+  const setError = useChatStore((state) => state.setError);
+  const clearChat = useChatStore((state) => state.clearChat);
   const { addToast } = useUIStore();
 
   const activeComicRef = useRef<string | null>(null);

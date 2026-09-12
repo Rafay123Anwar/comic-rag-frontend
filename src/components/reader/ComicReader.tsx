@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import axios from 'axios';
 import {
   ChevronLeft,
   ChevronRight,
@@ -7,10 +8,7 @@ import {
   Maximize2,
   Minimize2,
   RefreshCw,
-  RotateCcw,
   Sparkles,
-  ZoomIn,
-  ZoomOut,
 } from 'lucide-react';
 import {
   TransformWrapper,
@@ -25,16 +23,40 @@ import {
 } from '../../types/comic';
 import { prefetchPageWindow, getAuthenticatedImageUrl } from '../../services/imageCache';
 import { isDirectImageUrl } from '../../services/api';
+import { ZoomControls } from './ZoomControls';
 
 /**
  * Preload and decode an image in the browser image pipeline.
  * Resolves as soon as the image is decoded and ready to paint without blank frames.
  */
-function preloadImageSource(src: string): Promise<void> {
+function preloadImageSource(src: string, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException('Aborted', 'AbortError'));
+      return;
+    }
+
     const img = new Image();
-    img.src = src;
+
+    const onAbort = () => {
+      img.onload = null;
+      img.onerror = null;
+      img.src = '';
+      reject(new DOMException('Aborted', 'AbortError'));
+    };
+
+    if (signal) {
+      signal.addEventListener('abort', onAbort, { once: true });
+    }
+
+    const cleanup = () => {
+      if (signal) {
+        signal.removeEventListener('abort', onAbort);
+      }
+    };
+
     if (img.complete && img.naturalWidth > 0) {
+      cleanup();
       if ('decode' in img && typeof img.decode === 'function') {
         img.decode().then(resolve).catch(() => resolve());
       } else {
@@ -43,13 +65,18 @@ function preloadImageSource(src: string): Promise<void> {
       return;
     }
     img.onload = () => {
+      cleanup();
       if ('decode' in img && typeof img.decode === 'function') {
         img.decode().then(resolve).catch(() => resolve());
       } else {
         resolve();
       }
     };
-    img.onerror = (err) => reject(err);
+    img.onerror = (err) => {
+      cleanup();
+      reject(err);
+    };
+    img.src = src;
   });
 }
 
@@ -60,8 +87,13 @@ function preloadImageSource(src: string): Promise<void> {
 async function resolveAndPreloadPageImage(
   comicId: string,
   pageNum: number,
-  pages: ComicPage[]
+  pages: ComicPage[],
+  signal?: AbortSignal
 ): Promise<{ highResSrc: string | null; thumbSrc: string | null }> {
+  if (signal?.aborted) {
+    throw new DOMException('Aborted', 'AbortError');
+  }
+
   const pageObj = pages.find((p) => (p.page_number ?? 1) === pageNum);
   const directHigh = pageObj?.image_url;
   const directThumb = pageObj?.thumbnail_url;
@@ -74,24 +106,33 @@ async function resolveAndPreloadPageImage(
     highResSrc = directHigh;
   } else if (comicId) {
     try {
-      highResSrc = await getAuthenticatedImageUrl(comicId, pageNum, false);
-    } catch {
+      highResSrc = await getAuthenticatedImageUrl(comicId, pageNum, false, signal);
+    } catch (err: unknown) {
+      if (signal?.aborted || (err as { name?: string })?.name === 'AbortError' || axios.isCancel(err)) {
+        throw err;
+      }
       highResSrc = null;
     }
   }
 
   if (highResSrc) {
     try {
-      await preloadImageSource(highResSrc);
+      await preloadImageSource(highResSrc, signal);
       return { highResSrc, thumbSrc: null };
-    } catch {
+    } catch (err: unknown) {
+      if (signal?.aborted || (err as { name?: string })?.name === 'AbortError' || axios.isCancel(err)) {
+        throw err;
+      }
       // If direct high-res CDN failed, try authenticated backend route
       if (directHigh && isDirectImageUrl(directHigh) && comicId) {
         try {
-          const authFallback = await getAuthenticatedImageUrl(comicId, pageNum, false);
-          await preloadImageSource(authFallback);
+          const authFallback = await getAuthenticatedImageUrl(comicId, pageNum, false, signal);
+          await preloadImageSource(authFallback, signal);
           return { highResSrc: authFallback, thumbSrc: null };
-        } catch {
+        } catch (fallbackErr: unknown) {
+          if (signal?.aborted || (fallbackErr as { name?: string })?.name === 'AbortError' || axios.isCancel(fallbackErr)) {
+            throw fallbackErr;
+          }
           highResSrc = null;
         }
       } else {
@@ -105,17 +146,23 @@ async function resolveAndPreloadPageImage(
     thumbSrc = directThumb;
   } else if (comicId) {
     try {
-      thumbSrc = await getAuthenticatedImageUrl(comicId, pageNum, true);
-    } catch {
+      thumbSrc = await getAuthenticatedImageUrl(comicId, pageNum, true, signal);
+    } catch (err: unknown) {
+      if (signal?.aborted || (err as { name?: string })?.name === 'AbortError' || axios.isCancel(err)) {
+        throw err;
+      }
       thumbSrc = null;
     }
   }
 
   if (thumbSrc) {
     try {
-      await preloadImageSource(thumbSrc);
+      await preloadImageSource(thumbSrc, signal);
       return { highResSrc: null, thumbSrc };
-    } catch {
+    } catch (err: unknown) {
+      if (signal?.aborted || (err as { name?: string })?.name === 'AbortError' || axios.isCancel(err)) {
+        throw err;
+      }
       thumbSrc = null;
     }
   }
@@ -154,7 +201,10 @@ export function ComicReader({
   }, [externalToggleOcr, externalOcrOpen]);
 
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [currentScale, setCurrentScale] = useState(1);
+  const scaleRef = useRef(1);
+  const isZoomedRef = useRef(false);
+  const [isZoomed, setIsZoomed] = useState(false);
+  const onScaleChangeRef = useRef<((scale: number) => void) | null>(null);
 
   // Smooth image transition state: keeps the previous page frozen on screen while new page preloads in background
   const [displayedPage, setDisplayedPage] = useState<number>(currentPage);
@@ -220,6 +270,10 @@ export function ComicReader({
       setLoadFailed(false);
       setHighResLoaded(false);
       setThumbLoaded(false);
+      scaleRef.current = 1;
+      isZoomedRef.current = false;
+      setIsZoomed(false);
+      onScaleChangeRef.current?.(1);
     }
   }, [comicId, currentPage]);
 
@@ -265,9 +319,11 @@ export function ComicReader({
     }
     setLoadFailed(false);
 
-    resolveAndPreloadPageImage(comicId, targetPage, pages)
+    const controller = new AbortController();
+
+    resolveAndPreloadPageImage(comicId, targetPage, pages, controller.signal)
       .then((asset) => {
-        if (!isMounted) return;
+        if (!isMounted || controller.signal.aborted) return;
 
         if (asset.highResSrc || asset.thumbSrc) {
           // SWAP IMAGE ONLY ONCE FULLY PRELOADED!
@@ -281,7 +337,10 @@ export function ComicReader({
           setIsInitialLoading(false);
 
           // Reset zoom & center for the newly displayed page
-          setCurrentScale(1);
+          scaleRef.current = 1;
+          isZoomedRef.current = false;
+          setIsZoomed(false);
+          onScaleChangeRef.current?.(1);
           transformComponentRef.current?.resetTransform(0);
           requestAnimationFrame(() => {
             transformComponentRef.current?.centerView(1, 0);
@@ -295,8 +354,10 @@ export function ComicReader({
           setIsInitialLoading(false);
         }
       })
-      .catch(() => {
-        if (!isMounted) return;
+      .catch((err: unknown) => {
+        if (!isMounted || controller.signal.aborted || (err as { name?: string })?.name === 'AbortError' || axios.isCancel(err)) {
+          return;
+        }
         setDisplayedPage(targetPage);
         setDisplayedHighResSrc(null);
         setDisplayedThumbSrc(null);
@@ -307,6 +368,7 @@ export function ComicReader({
 
     return () => {
       isMounted = false;
+      controller.abort();
     };
   }, [comicId, currentPage, pages, comicOverallStatus, displayedPage, displayedHighResSrc, displayedThumbSrc]);
 
@@ -353,7 +415,7 @@ export function ComicReader({
         const elapsed = Date.now() - startTime;
 
         // When zoomed in, user is panning the comic; do not swipe pages
-        if (currentScale <= 1.05 && elapsed < 800) {
+        if (scaleRef.current <= 1.05 && elapsed < 800) {
           // Horizontal gesture must dominate and exceed 40px threshold
           if (Math.abs(diffX) > Math.abs(diffY) * 1.2 && Math.abs(diffX) > 40) {
             if (diffX > 0 && currentPage < totalPages) {
@@ -375,7 +437,7 @@ export function ComicReader({
       container.removeEventListener('touchstart', onTouchStart);
       container.removeEventListener('touchend', onTouchEnd);
     };
-  }, [currentScale, currentPage, totalPages, onPageChange]);
+  }, [currentPage, totalPages, onPageChange]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -521,6 +583,18 @@ export function ComicReader({
     !isPageProcessing &&
     loadFailed;
 
+  const handleTransform = useCallback((ref: ReactZoomPanPinchRef) => {
+    const newScale = ref.state.scale;
+    scaleRef.current = newScale;
+    onScaleChangeRef.current?.(newScale);
+
+    const zoomed = newScale > 1.05;
+    if (isZoomedRef.current !== zoomed) {
+      isZoomedRef.current = zoomed;
+      setIsZoomed(zoomed);
+    }
+  }, []);
+
   return (
     <div
       ref={readerContainerRef}
@@ -647,7 +721,7 @@ export function ComicReader({
               animationTime: 250,
             }}
             panning={{
-              disabled: currentScale <= 1.02,
+              disabled: !isZoomed,
               velocityDisabled: false,
             }}
             wheel={{
@@ -655,19 +729,15 @@ export function ComicReader({
               ...({ smoothStep: 0.005 } as Record<string, unknown>),
               disabled: false,
             }}
-            onTransform={(ref) => {
-              setCurrentScale(ref.state.scale);
-            }}
-            onInit={(ref) => {
-              setCurrentScale(ref.state.scale);
-            }}
+            onTransform={handleTransform}
+            onInit={handleTransform}
           >
             {({ zoomIn, zoomOut, resetTransform }) => (
               <>
                 <TransformComponent
                   wrapperClass="!w-full !h-full select-none"
                   contentClass={`transition-cursor ${
-                    currentScale > 1.05
+                    isZoomed
                       ? 'cursor-grab active:cursor-grabbing'
                       : 'cursor-default'
                   }`}
@@ -729,64 +799,13 @@ export function ComicReader({
                   </div>
                 )}
 
-                {/* Sleek Floating Zoom & Pan Controls UI (Desktop only; touch users pinch/double-tap natively) */}
-                <div
-                  className="hidden sm:flex absolute bottom-4 left-1/2 -translate-x-1/2 z-30 items-center gap-1 bg-[#121218]/90 backdrop-blur-md px-2.5 py-1.5 rounded-full border border-[#20202e] shadow-comic-sm transition-all duration-200 hover:border-[#323246]"
-                  role="toolbar"
-                  aria-label="Comic Zoom Controls"
-                >
-                  {/* Zoom Out Button (-) */}
-                  <button
-                    type="button"
-                    onClick={() => zoomOut(0.25, 200)}
-                    disabled={currentScale <= 1.01}
-                    title="Zoom Out (-)"
-                    aria-label="Zoom Out"
-                    className="p-1.5 rounded-full text-text-secondary hover:text-white hover:bg-[#22222e] disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                  >
-                    <ZoomOut className="w-3.5 h-3.5" />
-                  </button>
-
-                  {/* Current Zoom Percentage / Reset Indicator */}
-                  <button
-                    type="button"
-                    onClick={() => resetTransform(200)}
-                    title="Click to reset zoom (100%)"
-                    aria-label="Current zoom level, click to reset"
-                    className="px-2 py-0.5 rounded text-[11px] font-mono font-bold text-text-primary hover:text-[#ffd23f] hover:bg-[#1a1a24] transition-colors select-none min-w-[46px] text-center cursor-pointer"
-                  >
-                    {Math.round(currentScale * 100)}%
-                  </button>
-
-                  {/* Zoom In Button (+) */}
-                  <button
-                    type="button"
-                    onClick={() => zoomIn(0.25, 200)}
-                    disabled={currentScale >= 3.99}
-                    title="Zoom In (+)"
-                    aria-label="Zoom In"
-                    className="p-1.5 rounded-full text-text-secondary hover:text-white hover:bg-[#22222e] disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                  >
-                    <ZoomIn className="w-3.5 h-3.5" />
-                  </button>
-
-                  <div className="w-px h-3.5 bg-[#23232e] mx-0.5" />
-
-                  {/* Reset / Fit to Screen Button */}
-                  <button
-                    type="button"
-                    onClick={() => resetTransform(200)}
-                    title="Reset / Fit to Screen"
-                    aria-label="Reset / Fit to Screen"
-                    className={`p-1.5 rounded-full transition-colors cursor-pointer ${
-                      currentScale > 1.01
-                        ? 'text-[#ffd23f] hover:text-white hover:bg-[#22222e]'
-                        : 'text-text-secondary hover:text-white hover:bg-[#22222e]'
-                    }`}
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                  </button>
-                </div>
+                <ZoomControls
+                  scaleRef={scaleRef}
+                  onScaleChangeRef={onScaleChangeRef}
+                  zoomIn={zoomIn}
+                  zoomOut={zoomOut}
+                  resetTransform={resetTransform}
+                />
               </>
             )}
           </TransformWrapper>
@@ -818,7 +837,7 @@ export function ComicReader({
             currentPage <= 1
               ? 'opacity-20 cursor-not-allowed pointer-events-none'
               : 'opacity-50 hover:opacity-100'
-          } ${currentScale > 1.05 ? 'pointer-events-none !opacity-0' : 'pointer-events-auto'}`}
+          } ${isZoomed ? 'pointer-events-none !opacity-0' : 'pointer-events-auto'}`}
         >
           <ChevronLeft className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3]" />
         </button>
@@ -833,7 +852,7 @@ export function ComicReader({
             currentPage >= totalPages
               ? 'opacity-20 cursor-not-allowed pointer-events-none'
               : 'opacity-50 hover:opacity-100'
-          } ${currentScale > 1.05 ? 'pointer-events-none !opacity-0' : 'pointer-events-auto'}`}
+          } ${isZoomed ? 'pointer-events-none !opacity-0' : 'pointer-events-auto'}`}
         >
           <ChevronRight className="w-5 h-5 sm:w-6 sm:h-6 stroke-[3]" />
         </button>

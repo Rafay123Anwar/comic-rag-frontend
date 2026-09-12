@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { ChatMessage as ChatMessageType } from '../../types/api';
 import { formatTime } from '../../utils/formatting';
 import { SourceList } from '../sources/SourceList';
@@ -10,7 +11,7 @@ interface ChatMessageProps {
 
 const FALLBACK_ANSWER = "I could not find relevant information in the comic.";
 
-export function ChatMessage({ message, onNavigate }: ChatMessageProps) {
+export const ChatMessage = memo(function ChatMessage({ message, onNavigate }: ChatMessageProps) {
   const isUser = message.role === 'user';
   const isFallback = !isUser && message.content === FALLBACK_ANSWER;
 
@@ -92,4 +93,4 @@ export function ChatMessage({ message, onNavigate }: ChatMessageProps) {
       )}
     </div>
   );
-}
+});

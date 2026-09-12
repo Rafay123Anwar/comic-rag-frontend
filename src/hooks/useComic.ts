@@ -10,16 +10,14 @@ import { getErrorMessage } from '../utils/errors';
 import { touchComicLastOpened } from '../utils/storage';
 
 export function useComic() {
-  const {
-    currentComic,
-    currentPage,
-    loading,
-    error,
-    setComic,
-    setPage,
-    setLoading,
-    setError,
-  } = useComicStore();
+  const currentComic = useComicStore((state) => state.currentComic);
+  const currentPage = useComicStore((state) => state.currentPage);
+  const loading = useComicStore((state) => state.loading);
+  const error = useComicStore((state) => state.error);
+  const setComic = useComicStore((state) => state.setComic);
+  const setPage = useComicStore((state) => state.setPage);
+  const setLoading = useComicStore((state) => state.setLoading);
+  const setError = useComicStore((state) => state.setError);
 
   const activeComicIdRef = useRef<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);

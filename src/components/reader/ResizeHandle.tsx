@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface ResizeHandleProps {
   side: 'left' | 'right';
   currentWidth?: number;
   onResize: (newWidth: number) => void;
+  onResizeEnd?: (finalWidth: number) => void;
   minWidth?: number;
   maxWidth?: number;
   ariaLabel?: string;
@@ -11,12 +12,21 @@ interface ResizeHandleProps {
 
 export function ResizeHandle({
   side,
+  currentWidth,
   onResize,
+  onResizeEnd,
   minWidth = 120,
   maxWidth = 300,
   ariaLabel,
 }: ResizeHandleProps) {
   const [isDragging, setIsDragging] = useState(false);
+  const lastWidthRef = useRef<number>(currentWidth ?? minWidth);
+
+  useEffect(() => {
+    if (currentWidth !== undefined) {
+      lastWidthRef.current = currentWidth;
+    }
+  }, [currentWidth]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -43,6 +53,7 @@ export function ResizeHandle({
       }
 
       const clamped = Math.max(minWidth, Math.min(maxWidth, calculatedWidth));
+      lastWidthRef.current = clamped;
       onResize(clamped);
     };
 
@@ -58,11 +69,13 @@ export function ResizeHandle({
       }
 
       const clamped = Math.max(minWidth, Math.min(maxWidth, calculatedWidth));
+      lastWidthRef.current = clamped;
       onResize(clamped);
     };
 
     const handleEnd = () => {
       setIsDragging(false);
+      onResizeEnd?.(lastWidthRef.current);
     };
 
     document.addEventListener('mousemove', handleMouseMove);
@@ -82,7 +95,7 @@ export function ResizeHandle({
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     };
-  }, [isDragging, side, minWidth, maxWidth, onResize]);
+  }, [isDragging, side, minWidth, maxWidth, onResize, onResizeEnd]);
 
   return (
     <div

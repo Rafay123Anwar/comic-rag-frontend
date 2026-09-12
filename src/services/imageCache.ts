@@ -16,7 +16,25 @@ const imageCache = new Map<string, CacheEntry>();
 const inFlightRequests = new Map<string, Promise<string>>();
 
 /** Maximum cached images before evicting oldest entries */
-const MAX_CACHE_SIZE = 300;
+const MAX_CACHE_SIZE = 25;
+
+/**
+ * Evicts the oldest entry in the LRU cache and revokes its Object URL to free RAM.
+ */
+function evictOldest(): void {
+  if (imageCache.size >= MAX_CACHE_SIZE) {
+    const oldestKey = imageCache.keys().next().value;
+    if (oldestKey) {
+      const oldEntry = imageCache.get(oldestKey);
+      if (oldEntry) {
+        if (oldEntry.url.startsWith('blob:')) {
+          URL.revokeObjectURL(oldEntry.url);
+        }
+        imageCache.delete(oldestKey);
+      }
+    }
+  }
+}
 
 function getCacheKey(comicId: string, pageNumber: number, isThumbnail: boolean): string {
   return `${comicId}:${pageNumber}:${isThumbnail ? 'thumb' : 'full'}`;
@@ -64,8 +82,13 @@ function preloadImageBitmap(url: string): void {
 export async function getAuthenticatedImageUrl(
   comicId: string,
   pageNumber: number,
-  isThumbnail: boolean = false
+  isThumbnail: boolean = false,
+  signal?: AbortSignal
 ): Promise<string> {
+  if (signal?.aborted) {
+    throw new DOMException('Aborted', 'AbortError');
+  }
+
   const key = getCacheKey(comicId, pageNumber, isThumbnail);
 
   // Return cached Object URL if available
@@ -77,7 +100,25 @@ export async function getAuthenticatedImageUrl(
   // Deduplicate simultaneous requests for the same image
   const inFlight = inFlightRequests.get(key);
   if (inFlight) {
-    return inFlight;
+    if (!signal) return inFlight;
+    return new Promise<string>((resolve, reject) => {
+      if (signal.aborted) {
+        reject(new DOMException('Aborted', 'AbortError'));
+        return;
+      }
+      const onAbort = () => reject(new DOMException('Aborted', 'AbortError'));
+      signal.addEventListener('abort', onAbort, { once: true });
+
+      inFlight
+        .then((url) => {
+          signal.removeEventListener('abort', onAbort);
+          resolve(url);
+        })
+        .catch((err) => {
+          signal.removeEventListener('abort', onAbort);
+          reject(err);
+        });
+    });
   }
 
   const endpoint = isThumbnail
@@ -88,6 +129,7 @@ export async function getAuthenticatedImageUrl(
     try {
       const response = await apiClient.get<Blob>(endpoint, {
         responseType: 'blob',
+        signal,
       });
 
       const blob = response.data;
@@ -97,17 +139,8 @@ export async function getAuthenticatedImageUrl(
 
       const objectUrl = URL.createObjectURL(blob);
 
-      // Evict oldest if cache exceeded
-      if (imageCache.size >= MAX_CACHE_SIZE) {
-        const oldestKey = imageCache.keys().next().value;
-        if (oldestKey) {
-          const oldEntry = imageCache.get(oldestKey);
-          if (oldEntry) {
-            URL.revokeObjectURL(oldEntry.url);
-            imageCache.delete(oldestKey);
-          }
-        }
-      }
+      // Evict oldest if cache exceeded and revoke its blob URL
+      evictOldest();
 
       imageCache.set(key, {
         url: objectUrl,
@@ -121,6 +154,7 @@ export async function getAuthenticatedImageUrl(
       return objectUrl;
     } catch (err) {
       imageCache.delete(key);
+      inFlightRequests.delete(key);
       throw err;
     } finally {
       inFlightRequests.delete(key);
@@ -128,6 +162,11 @@ export async function getAuthenticatedImageUrl(
   })();
 
   inFlightRequests.set(key, fetchPromise);
+
+  if (signal) {
+    signal.addEventListener('abort', () => inFlightRequests.delete(key), { once: true });
+  }
+
   return fetchPromise;
 }
 
@@ -137,10 +176,11 @@ export async function getAuthenticatedImageUrl(
 export async function prefetchPage(
   comicId: string,
   pageNumber: number,
-  isThumbnail: boolean = false
+  isThumbnail: boolean = false,
+  signal?: AbortSignal
 ): Promise<string | null> {
   try {
-    return await getAuthenticatedImageUrl(comicId, pageNumber, isThumbnail);
+    return await getAuthenticatedImageUrl(comicId, pageNumber, isThumbnail, signal);
   } catch {
     return null;
   }

@@ -6,6 +6,7 @@ import axios from 'axios';
 import type { LoginCredentials, SignupCredentials, User } from '../types/auth';
 import { getMe, login as apiLogin, signup as apiSignup } from '../services/authApi';
 import { setSkipAuthRedirect } from '../services/api';
+import { clearStoredToken, getStoredToken, setStoredToken } from '../utils/token';
 import { clearAllImageCache } from '../services/imageCache';
 import { getErrorMessage } from '../utils/errors';
 
@@ -24,18 +25,16 @@ interface AuthState {
   clearError: () => void;
 }
 
-const TOKEN_KEY = 'auth_token';
-
 export const useAuthStore = create<AuthState>((set) => ({
-  token: localStorage.getItem(TOKEN_KEY),
+  token: getStoredToken(),
   user: null,
-  isAuthenticated: !!localStorage.getItem(TOKEN_KEY),
+  isAuthenticated: !!getStoredToken(),
   isInitialized: false,
   isLoading: false,
   error: null,
 
   initializeAuth: async () => {
-    const token = localStorage.getItem(TOKEN_KEY);
+    const token = getStoredToken();
     if (!token) {
       set({
         token: null,
@@ -69,7 +68,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
       if (isAuthRejection) {
         // Token is invalid / expired — clear it and require re-login
-        localStorage.removeItem(TOKEN_KEY);
+        clearStoredToken();
         set({
           token: null,
           user: null,
@@ -97,7 +96,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       set({ isLoading: true, error: null });
       const response = await apiLogin(credentials);
-      localStorage.setItem(TOKEN_KEY, response.access_token);
+      setStoredToken(response.access_token);
       set({
         token: response.access_token,
         user: response.user,
@@ -125,7 +124,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   logout: () => {
-    localStorage.removeItem(TOKEN_KEY);
+    clearStoredToken();
     clearAllImageCache();
     set({
       token: null,
@@ -138,3 +137,10 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   clearError: () => set({ error: null }),
 }));
+
+// Listen for unauthorized events dispatched by API layer without circular imports
+if (typeof window !== 'undefined') {
+  window.addEventListener('auth:unauthorized', () => {
+    useAuthStore.getState().logout();
+  });
+}

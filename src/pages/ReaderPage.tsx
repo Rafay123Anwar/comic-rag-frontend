@@ -13,6 +13,7 @@ import { Skeleton, SkeletonBlock } from '../components/common/Skeleton';
 import { useComic } from '../hooks/useComic';
 import { useUIStore } from '../stores/uiStore';
 import { getComicId } from '../types/comic';
+import { revokeComicImages } from '../services/imageCache';
 import {
   getAIPanelWidth,
   saveAIPanelWidth,
@@ -46,6 +47,15 @@ export default function ReaderPage() {
     }
   }, [comicId, fetchComic]);
 
+  // Free cached image blobs when switching comics or unmounting reader
+  useEffect(() => {
+    return () => {
+      if (comicId) {
+        revokeComicImages(comicId);
+      }
+    };
+  }, [comicId]);
+
   useEffect(() => {
     if (error) {
       const errLower = error.toLowerCase();
@@ -68,11 +78,17 @@ export default function ReaderPage() {
 
   const handleResizeSidebar = useCallback((width: number) => {
     setSidebarWidth(width);
+  }, []);
+
+  const handleResizeSidebarEnd = useCallback((width: number) => {
     saveSidebarWidth(width);
   }, []);
 
   const handleResizeAI = useCallback((width: number) => {
     setAiPanelWidth(width);
+  }, []);
+
+  const handleResizeAIEnd = useCallback((width: number) => {
     saveAIPanelWidth(width);
   }, []);
 
@@ -219,6 +235,7 @@ export default function ReaderPage() {
               side="left"
               currentWidth={sidebarWidth}
               onResize={handleResizeSidebar}
+              onResizeEnd={handleResizeSidebarEnd}
               minWidth={120}
               maxWidth={260}
               ariaLabel="Resize Left Page Rail"
@@ -251,6 +268,7 @@ export default function ReaderPage() {
               side="right"
               currentWidth={aiPanelWidth}
               onResize={handleResizeAI}
+              onResizeEnd={handleResizeAIEnd}
               minWidth={320}
               maxWidth={520}
               ariaLabel="Resize AI Companion Panel"
