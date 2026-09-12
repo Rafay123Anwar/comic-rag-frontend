@@ -46,6 +46,18 @@ export default function ReaderPage() {
     }
   }, [comicId, fetchComic]);
 
+  useEffect(() => {
+    if (error) {
+      const errLower = error.toLowerCase();
+      if (errLower.includes('401') || errLower.includes('unauthorized') || errLower.includes('session has expired')) {
+        localStorage.removeItem('auth_token');
+        if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
+      }
+    }
+  }, [error]);
+
   const handleSignedUrlExpired = useCallback(() => {
     if (comicId && !hasRefreshedExpiredUrls) {
       setHasRefreshedExpiredUrls(true);
@@ -115,30 +127,38 @@ export default function ReaderPage() {
   }
 
   if (error || !isMatchingComic) {
+    const isAuthError =
+      Boolean(error &&
+      (error.includes('401') ||
+        error.toLowerCase().includes('unauthorized') ||
+        error.toLowerCase().includes('session has expired')));
+
     return (
       <div className="h-screen flex flex-col bg-[#08080a]">
         <div className="h-13 min-h-[52px] border-b border-[#20202a] bg-[#111116] flex items-center px-4">
           <Link
-            to="/library"
+            to={isAuthError ? "/login" : "/library"}
             className="flex items-center gap-1.5 font-comic text-sm text-[#ffd23f] hover:underline"
           >
             <ArrowLeft className="w-4 h-4" />
-            BACK TO VAULT
+            {isAuthError ? "GO TO LOGIN" : "BACK TO VAULT"}
           </Link>
         </div>
         <div className="flex-1 flex items-center justify-center p-6 bg-reading-room">
           <div className="max-w-md w-full p-6 rounded-2xl bg-[#13131a] border-2 border-black shadow-comic text-center space-y-4">
             <h2 className="font-comic text-xl text-[#ffd23f] tracking-wider uppercase">
-              {error ? 'UNABLE TO LOAD COMIC' : 'COMIC NOT FOUND'}
+              {isAuthError ? 'SESSION EXPIRED' : error ? 'UNABLE TO LOAD COMIC' : 'COMIC NOT FOUND'}
             </h2>
             <p className="text-xs text-text-muted leading-relaxed">
-              {error ?? 'This comic could not be loaded from storage.'}
+              {isAuthError
+                ? 'Your session has expired. Please sign in again.'
+                : error ?? 'This comic could not be loaded from storage.'}
             </p>
             <Link
-              to="/library"
+              to={isAuthError ? "/login" : "/library"}
               className="inline-flex items-center gap-2 px-4 py-2 bg-[#ffd23f] text-black font-comic text-sm rounded-xl shadow-comic-sm hover:bg-[#e6bd35] comic-btn-tactile"
             >
-              RETURN TO LIBRARY
+              {isAuthError ? "GO TO LOGIN" : "RETURN TO LIBRARY"}
             </Link>
           </div>
         </div>

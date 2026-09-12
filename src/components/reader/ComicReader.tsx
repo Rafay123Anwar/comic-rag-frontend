@@ -23,9 +23,105 @@ import {
   getComicId,
   getComicTotalPages,
 } from '../../types/comic';
-import { useAuthenticatedImage } from '../../hooks/useAuthenticatedImage';
-import { prefetchPageWindow, getCachedImageUrl } from '../../services/imageCache';
+import { prefetchPageWindow, getAuthenticatedImageUrl } from '../../services/imageCache';
 import { isDirectImageUrl } from '../../services/api';
+
+/**
+ * Preload and decode an image in the browser image pipeline.
+ * Resolves as soon as the image is decoded and ready to paint without blank frames.
+ */
+function preloadImageSource(src: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.src = src;
+    if (img.complete && img.naturalWidth > 0) {
+      if ('decode' in img && typeof img.decode === 'function') {
+        img.decode().then(resolve).catch(() => resolve());
+      } else {
+        resolve();
+      }
+      return;
+    }
+    img.onload = () => {
+      if ('decode' in img && typeof img.decode === 'function') {
+        img.decode().then(resolve).catch(() => resolve());
+      } else {
+        resolve();
+      }
+    };
+    img.onerror = (err) => reject(err);
+  });
+}
+
+/**
+ * Resolves the appropriate image asset (high-res with thumbnail fallback)
+ * and preloads it into browser cache before resolving.
+ */
+async function resolveAndPreloadPageImage(
+  comicId: string,
+  pageNum: number,
+  pages: ComicPage[]
+): Promise<{ highResSrc: string | null; thumbSrc: string | null }> {
+  const pageObj = pages.find((p) => (p.page_number ?? 1) === pageNum);
+  const directHigh = pageObj?.image_url;
+  const directThumb = pageObj?.thumbnail_url;
+
+  let highResSrc: string | null = null;
+  let thumbSrc: string | null = null;
+
+  // 1. Try High-Res Image first
+  if (directHigh && isDirectImageUrl(directHigh)) {
+    highResSrc = directHigh;
+  } else if (comicId) {
+    try {
+      highResSrc = await getAuthenticatedImageUrl(comicId, pageNum, false);
+    } catch {
+      highResSrc = null;
+    }
+  }
+
+  if (highResSrc) {
+    try {
+      await preloadImageSource(highResSrc);
+      return { highResSrc, thumbSrc: null };
+    } catch {
+      // If direct high-res CDN failed, try authenticated backend route
+      if (directHigh && isDirectImageUrl(directHigh) && comicId) {
+        try {
+          const authFallback = await getAuthenticatedImageUrl(comicId, pageNum, false);
+          await preloadImageSource(authFallback);
+          return { highResSrc: authFallback, thumbSrc: null };
+        } catch {
+          highResSrc = null;
+        }
+      } else {
+        highResSrc = null;
+      }
+    }
+  }
+
+  // 2. Fallback to Thumbnail preview if High-Res is not available or failed
+  if (directThumb && isDirectImageUrl(directThumb)) {
+    thumbSrc = directThumb;
+  } else if (comicId) {
+    try {
+      thumbSrc = await getAuthenticatedImageUrl(comicId, pageNum, true);
+    } catch {
+      thumbSrc = null;
+    }
+  }
+
+  if (thumbSrc) {
+    try {
+      await preloadImageSource(thumbSrc);
+      return { highResSrc: null, thumbSrc };
+    } catch {
+      thumbSrc = null;
+    }
+  }
+
+  return { highResSrc: null, thumbSrc: null };
+}
 
 interface ComicReaderProps {
   comic: ComicDetailResponse;
@@ -60,13 +156,17 @@ export function ComicReader({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [currentScale, setCurrentScale] = useState(1);
 
-  // High-resolution image state
-  const [highResLoaded, setHighResLoaded] = useState(false);
-  const [directHighResError, setDirectHighResError] = useState(false);
+  // Smooth image transition state: keeps the previous page frozen on screen while new page preloads in background
+  const [displayedPage, setDisplayedPage] = useState<number>(currentPage);
+  const [displayedHighResSrc, setDisplayedHighResSrc] = useState<string | null>(null);
+  const [displayedThumbSrc, setDisplayedThumbSrc] = useState<string | null>(null);
+  const [isTransitioning, setIsTransitioning] = useState<boolean>(false);
+  const [isInitialLoading, setIsInitialLoading] = useState<boolean>(true);
+  const [loadFailed, setLoadFailed] = useState<boolean>(false);
 
-  // Low-resolution preview/thumbnail state
+  // High-resolution image state for currently displayed page
+  const [highResLoaded, setHighResLoaded] = useState(false);
   const [thumbLoaded, setThumbLoaded] = useState(false);
-  const [directThumbError, setDirectThumbError] = useState(false);
 
   const readerContainerRef = useRef<HTMLDivElement | null>(null);
   const transformComponentRef = useRef<ReactZoomPanPinchRef | null>(null);
@@ -74,16 +174,17 @@ export function ComicReader({
   const comicId = getComicId(comic);
   const totalPages = getComicTotalPages(comic);
   const pages = Array.isArray(comic.pages) ? comic.pages : [];
-  const activePageObj = pages.find((p) => (p.page_number ?? 1) === currentPage) || pages[0];
 
-  const directHighResUrl = activePageObj?.image_url;
-  const directThumbUrl = activePageObj?.thumbnail_url;
+  // Active page object for currently displayed page vs target page
+  const activePageObj = pages.find((p) => (p.page_number ?? 1) === displayedPage) || pages[0];
+  const targetPageObj = pages.find((p) => (p.page_number ?? 1) === currentPage) || pages[0];
+
   const comicOverallStatus = comic.comic?.status || comic.status;
   const isPageProcessing =
-    activePageObj?.status === 'processing' ||
+    targetPageObj?.status === 'processing' ||
     (comicOverallStatus === 'processing' &&
-      activePageObj?.status !== 'success' &&
-      activePageObj?.status !== 'completed');
+      targetPageObj?.status !== 'success' &&
+      targetPageObj?.status !== 'completed');
 
   // Track ready pages so prefetching does not trigger premature fetch errors
   const readyPages = useMemo(() => {
@@ -106,57 +207,116 @@ export function ComicReader({
     }
   }, [comicId, currentPage, totalPages, readyPages]);
 
-  // 2. Reset loading, error, and zoom states on page / URL change
-  // If images are already cached (blob: or direct CDN URL), skip the loading flash.
+  // Reset displayed state when switching to a completely different comic
+  const lastComicIdRef = useRef<string>(comicId);
   useEffect(() => {
-    const highResAlreadyCached =
-      (isDirectImageUrl(directHighResUrl) && !!directHighResUrl) ||
-      !!(comicId && getCachedImageUrl(comicId, currentPage, false));
-    const thumbAlreadyCached =
-      (isDirectImageUrl(directThumbUrl) && !!directThumbUrl) ||
-      !!(comicId && getCachedImageUrl(comicId, currentPage, true));
+    if (lastComicIdRef.current !== comicId) {
+      lastComicIdRef.current = comicId;
+      setDisplayedPage(currentPage);
+      setDisplayedHighResSrc(null);
+      setDisplayedThumbSrc(null);
+      setIsTransitioning(false);
+      setIsInitialLoading(true);
+      setLoadFailed(false);
+      setHighResLoaded(false);
+      setThumbLoaded(false);
+    }
+  }, [comicId, currentPage]);
 
-    setHighResLoaded(highResAlreadyCached);
-    setDirectHighResError(false);
-    setThumbLoaded(thumbAlreadyCached);
-    setDirectThumbError(false);
-    setCurrentScale(1);
-    transformComponentRef.current?.resetTransform(0);
-    requestAnimationFrame(() => {
-      transformComponentRef.current?.centerView(1, 0);
-    });
-  }, [comicId, currentPage, directHighResUrl, directThumbUrl]);
+  // 2. Smooth Image Preload Transition:
+  // When currentPage changes, previous image stays visible (frozen) on screen.
+  // New image is preloaded in the background and only swapped once fully loaded (onLoad/decode).
+  useEffect(() => {
+    if (!comicId) return;
 
-  const isDirectHighRes = isDirectImageUrl(directHighResUrl);
-  const isDirectThumb = isDirectImageUrl(directThumbUrl);
+    let isMounted = true;
+    const targetPage = currentPage;
 
-  // 3. Authenticated Images (enabled if not a direct external CDN URL or if direct loading errored)
-  const needFallbackHighRes = !isDirectHighRes || directHighResError;
-  const { src: fallbackHighResUrl, loading: fallbackHighResLoading, error: fallbackHighResError } =
-    useAuthenticatedImage(comicId, currentPage, {
-      isThumbnail: false,
-      enabled: needFallbackHighRes,
-    });
+    const targetObj = pages.find((p) => (p.page_number ?? 1) === targetPage);
+    const isTargetStillProcessing =
+      targetObj?.status === 'processing' ||
+      (comicOverallStatus === 'processing' &&
+        targetObj?.status !== 'success' &&
+        targetObj?.status !== 'completed');
 
-  const needFallbackThumb = !isDirectThumb || directThumbError;
-  const { src: fallbackThumbUrl } = useAuthenticatedImage(comicId, currentPage, {
-    isThumbnail: true,
-    enabled: needFallbackThumb,
-  });
+    // If target page is processing and has no image assets at all, transition immediately to show processing UI
+    if (isTargetStillProcessing && !targetObj?.image_url && !targetObj?.thumbnail_url) {
+      setDisplayedPage(targetPage);
+      setDisplayedHighResSrc(null);
+      setDisplayedThumbSrc(null);
+      setIsTransitioning(false);
+      setIsInitialLoading(false);
+      return;
+    }
 
-  // Effective Image Sources: use direct CDN URL only if valid and un-errored, otherwise use authenticated blob URL
-  const effectiveHighResSrc = (isDirectHighRes && !directHighResError && directHighResUrl) || fallbackHighResUrl;
-  const effectiveThumbSrc = (isDirectThumb && !directThumbError && directThumbUrl) || fallbackThumbUrl;
+    // If already showing target page with an image loaded, no transition needed
+    if (displayedPage === targetPage && (displayedHighResSrc || displayedThumbSrc)) {
+      setIsTransitioning(false);
+      setIsInitialLoading(false);
+      return;
+    }
+
+    // Freeze existing image and activate subtle loading transition
+    const hasCurrentVisibleImage = Boolean(displayedHighResSrc || displayedThumbSrc);
+    if (hasCurrentVisibleImage) {
+      setIsTransitioning(true);
+    } else {
+      setIsInitialLoading(true);
+    }
+    setLoadFailed(false);
+
+    resolveAndPreloadPageImage(comicId, targetPage, pages)
+      .then((asset) => {
+        if (!isMounted) return;
+
+        if (asset.highResSrc || asset.thumbSrc) {
+          // SWAP IMAGE ONLY ONCE FULLY PRELOADED!
+          setDisplayedPage(targetPage);
+          setDisplayedHighResSrc(asset.highResSrc);
+          setDisplayedThumbSrc(asset.thumbSrc);
+          setHighResLoaded(Boolean(asset.highResSrc));
+          setThumbLoaded(Boolean(asset.thumbSrc));
+          setLoadFailed(false);
+          setIsTransitioning(false);
+          setIsInitialLoading(false);
+
+          // Reset zoom & center for the newly displayed page
+          setCurrentScale(1);
+          transformComponentRef.current?.resetTransform(0);
+          requestAnimationFrame(() => {
+            transformComponentRef.current?.centerView(1, 0);
+          });
+        } else {
+          setDisplayedPage(targetPage);
+          setDisplayedHighResSrc(null);
+          setDisplayedThumbSrc(null);
+          setLoadFailed(true);
+          setIsTransitioning(false);
+          setIsInitialLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setDisplayedPage(targetPage);
+        setDisplayedHighResSrc(null);
+        setDisplayedThumbSrc(null);
+        setLoadFailed(true);
+        setIsTransitioning(false);
+        setIsInitialLoading(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [comicId, currentPage, pages, comicOverallStatus, displayedPage, displayedHighResSrc, displayedThumbSrc]);
 
   const handleDirectHighResError = () => {
-    setDirectHighResError(true);
     if (onSignedUrlExpired) {
       onSignedUrlExpired();
     }
   };
 
   const handleDirectThumbError = () => {
-    setDirectThumbError(true);
     if (onSignedUrlExpired) {
       onSignedUrlExpired();
     }
@@ -346,10 +506,20 @@ export function ComicReader({
   };
 
   const characters =
+    targetPageObj?.analysis?.visual_description?.characters ||
     activePageObj?.analysis?.visual_description?.characters ||
-    (Array.isArray(activePageObj?.characters) ? activePageObj.characters : []);
-  const isHighResLoading = !highResLoaded && (needFallbackHighRes ? fallbackHighResLoading : true);
-  const isCompleteFailure = !effectiveHighResSrc && !effectiveThumbSrc && fallbackHighResError;
+    (Array.isArray(targetPageObj?.characters)
+      ? targetPageObj.characters
+      : Array.isArray(activePageObj?.characters)
+      ? activePageObj.characters
+      : []);
+  const isHighResLoading = !highResLoaded && Boolean(displayedThumbSrc);
+  const isCompleteFailure =
+    !displayedHighResSrc &&
+    !displayedThumbSrc &&
+    !isInitialLoading &&
+    !isPageProcessing &&
+    loadFailed;
 
   return (
     <div
@@ -410,10 +580,20 @@ export function ComicReader({
         </button>
       </div>
 
-      {/* Main Comic Canvas with Progressive Two-Stage Rendering */}
+      {/* Main Comic Canvas with Progressive Two-Stage Rendering & Frozen Preload Transition */}
       <div className="relative flex-1 flex items-center justify-center p-0 sm:p-2 md:p-4 overflow-hidden touch-pan-y w-full h-full">
-        {/* Loading Spinner for Ready Pages Still Fetching */}
-        {!isPageProcessing && !effectiveThumbSrc && !effectiveHighResSrc && !isCompleteFailure && (
+        {/* Subtle loading spinner overlay on top of old frozen image during transition */}
+        {isTransitioning && (
+          <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/40 backdrop-blur-[2px] transition-opacity duration-200 pointer-events-none animate-fade-in">
+            <div className="flex items-center gap-2.5 px-4 py-2 bg-[#121218]/95 border-2 border-[#ffd23f]/70 rounded-full shadow-comic text-xs font-comic text-[#ffd23f] tracking-wider uppercase animate-pulse">
+              <RefreshCw className="w-4 h-4 text-[#ffd23f] animate-spin shrink-0" />
+              <span>LOADING PAGE {currentPage}…</span>
+            </div>
+          </div>
+        )}
+
+        {/* Initial Loading Spinner ONLY on first boot if no page image is ready yet */}
+        {!isPageProcessing && !displayedThumbSrc && !displayedHighResSrc && !isCompleteFailure && isInitialLoading && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#08080a]/80 backdrop-blur-sm z-10">
             <RefreshCw className="w-7 h-7 text-[#ffd23f] animate-spin" />
             <span className="font-comic text-xs tracking-wider text-[#ffd23f]">
@@ -423,7 +603,7 @@ export function ComicReader({
         )}
 
         {/* Processing State with Animated Skeleton & Spinner: ONLY if page is processing AND no image available */}
-        {isPageProcessing && !effectiveThumbSrc && !effectiveHighResSrc && (
+        {isPageProcessing && !displayedThumbSrc && !displayedHighResSrc && (
           <div className="flex flex-col items-center justify-center gap-4 bg-[#0e0e14] border-2 border-[#1f1f2e] p-8 rounded-2xl shadow-comic max-w-sm w-full text-center">
             <RefreshCw className="w-8 h-8 text-[#ffd23f] animate-spin" />
             <div>
@@ -441,7 +621,7 @@ export function ComicReader({
         )}
 
         {/* Non-blocking Floating Background AI Indicator when image is rendering */}
-        {isPageProcessing && (effectiveThumbSrc || effectiveHighResSrc) && (
+        {isPageProcessing && (displayedThumbSrc || displayedHighResSrc) && (
           <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 bg-[#121218]/90 backdrop-blur-md px-4 py-1.5 rounded-full border border-[#ffd23f]/40 shadow-comic text-xs font-mono text-[#ffd23f] pointer-events-none animate-pulse">
             <span className="text-sm">⚡</span>
             <span>AI analyzing page in background...</span>
@@ -449,9 +629,9 @@ export function ComicReader({
         )}
 
         {/* Two-Stage Progressive Rendering Container with Zoom & Pan */}
-        {!isCompleteFailure && (effectiveThumbSrc || effectiveHighResSrc) ? (
+        {!isCompleteFailure && (displayedThumbSrc || displayedHighResSrc) ? (
           <TransformWrapper
-            key={`zoom-${comicId}-${currentPage}`}
+            key={`zoom-${comicId}-${displayedPage}`}
             ref={transformComponentRef}
             initialScale={1}
             minScale={1}
@@ -494,11 +674,11 @@ export function ComicReader({
                 >
                   <div className="relative inline-block">
                     {/* Stage 1: Low-Resolution Placeholder (renders instantly) */}
-                    {effectiveThumbSrc && !highResLoaded && (
+                    {displayedThumbSrc && !highResLoaded && (
                       <img
-                        key={`thumb-${comicId}-${currentPage}`}
-                        src={effectiveThumbSrc}
-                        alt={`Page ${currentPage} Preview`}
+                        key={`thumb-${comicId}-${displayedPage}`}
+                        src={displayedThumbSrc}
+                        alt={`Page ${displayedPage} Preview`}
                         loading="eager"
                         decoding="async"
                         onLoad={() => {
@@ -515,11 +695,11 @@ export function ComicReader({
                     )}
 
                     {/* Stage 2: High-Resolution Final Image (streams & smoothly overlays on top) */}
-                    {effectiveHighResSrc && (
+                    {displayedHighResSrc && (
                       <img
-                        key={`full-${comicId}-${currentPage}`}
-                        src={effectiveHighResSrc}
-                        alt={`Comic Page ${currentPage}`}
+                        key={`full-${comicId}-${displayedPage}`}
+                        src={displayedHighResSrc}
+                        alt={`Comic Page ${displayedPage}`}
                         loading="eager"
                         decoding="async"
                         onLoad={() => {
@@ -532,9 +712,9 @@ export function ComicReader({
                         className={`max-h-[calc(100dvh-7.5rem)] md:max-h-[calc(100vh-6.5rem)] w-auto max-w-full object-contain mx-auto block rounded-none sm:rounded-xl border-0 sm:border-2 border-[#15151c] shadow-[0_4px_30px_rgba(0,0,0,0.9)] transition-opacity duration-300 ${
                           highResLoaded
                             ? 'opacity-100'
-                            : effectiveThumbSrc && thumbLoaded
+                            : displayedThumbSrc && thumbLoaded
                             ? 'opacity-0 absolute inset-0 m-auto'
-                            : 'opacity-0'
+                            : 'opacity-100'
                         }`}
                       />
                     )}

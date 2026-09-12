@@ -136,7 +136,12 @@ export async function askInConversationStream(
     }
     if (response.status === 401) {
       localStorage.removeItem('auth_token');
-      if (window.location.pathname !== '/login' && window.location.pathname !== '/signup') {
+      try {
+        import('../stores/authStore').then(({ useAuthStore }) => {
+          useAuthStore.getState().logout();
+        }).catch(() => {});
+      } catch {}
+      if (typeof window !== 'undefined' && window.location.pathname !== '/login' && window.location.pathname !== '/signup') {
         window.location.href = '/login';
       }
       throw new Error('Your session has expired. Please sign in again.');

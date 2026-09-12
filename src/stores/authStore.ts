@@ -77,6 +77,9 @@ export const useAuthStore = create<AuthState>((set) => ({
           isInitialized: true,
           isLoading: false,
         });
+        if (typeof window !== 'undefined' && window.location.pathname !== '/login' && window.location.pathname !== '/signup') {
+          window.location.href = '/login';
+        }
       } else {
         // Network error or server issue — keep the token, mark as authenticated
         // so the user isn't kicked out just because the backend was briefly unreachable

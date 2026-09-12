@@ -70,12 +70,11 @@ const apiClient = axios.create({
 // Attach Bearer Token to outgoing requests
 apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem('auth_token');
-  if (token) {
-    if (config.headers && typeof config.headers.set === 'function') {
+  if (token && config.headers) {
+    if (typeof config.headers.set === 'function') {
       config.headers.set('Authorization', `Bearer ${token}`);
     } else {
-      config.headers = config.headers || {};
-      (config.headers as Record<string, string>).Authorization = `Bearer ${token}`;
+      (config.headers as Record<string, unknown>)['Authorization'] = `Bearer ${token}`;
     }
   }
   return config;
@@ -88,21 +87,26 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      const isAuthEndpoint =
-        error.config?.url?.includes('/auth/login') ||
-        error.config?.url?.includes('/auth/signup') ||
-        error.config?.url?.includes('/auth/me');
-
-      // If another part of the code has set the skip flag (e.g. initializeAuth),
-      // let the caller handle the 401 themselves and don't wipe the token.
+      // If initializeAuth explicitly requested skipping redirect during initial boot verification
       if (skipAuthRedirectOnce) {
         skipAuthRedirectOnce = false;
         return Promise.reject(error);
       }
 
-      if (!isAuthEndpoint) {
+      const isLoginOrSignup =
+        error.config?.url?.includes('/auth/login') ||
+        error.config?.url?.includes('/auth/signup');
+
+      if (!isLoginOrSignup) {
         localStorage.removeItem('auth_token');
-        if (window.location.pathname !== '/login' && window.location.pathname !== '/signup') {
+        try {
+          // Asynchronously clear zustand store and caches without circular dependency
+          import('../stores/authStore').then(({ useAuthStore }) => {
+            useAuthStore.getState().logout();
+          }).catch(() => {});
+        } catch {}
+
+        if (typeof window !== 'undefined' && window.location.pathname !== '/login' && window.location.pathname !== '/signup') {
           window.location.href = '/login';
         }
       }
