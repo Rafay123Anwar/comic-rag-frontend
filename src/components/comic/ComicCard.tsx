@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { BookOpen, Clock, FileText, RefreshCw, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { LocalComicEntry } from '../../types/comic';
@@ -17,6 +17,11 @@ export function ComicCard({ comic, onDelete, isDeleting = false }: ComicCardProp
   const [directError, setDirectError] = useState(false);
   const directCoverUrl = comic.cover_thumbnail_url;
   const isProcessing = comic.status === 'processing';
+
+  // Reset direct error state if directCoverUrl changes or comic status transitions (e.g. processing -> completed)
+  useEffect(() => {
+    setDirectError(false);
+  }, [directCoverUrl, comic.status]);
 
   const isDirectCover = isDirectImageUrl(directCoverUrl);
   // Enable authenticated thumbnail fetch if direct cover URL is missing, not a public CDN, or errored
