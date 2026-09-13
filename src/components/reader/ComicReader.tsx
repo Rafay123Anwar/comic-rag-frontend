@@ -212,7 +212,10 @@ export function ComicReader({
 
   const comicId = getComicId(comic);
   const totalPages = getComicTotalPages(comic);
-  const pages = Array.isArray(comic.pages) ? comic.pages : [];
+  const pages = useMemo(
+    () => (Array.isArray(comic.pages) ? comic.pages : []),
+    [comic.pages]
+  );
 
   // Active page object for currently displayed page vs target page
   const activePageObj = pages.find((p) => (p.page_number ?? 1) === displayedPage) || pages[0];
@@ -242,9 +245,9 @@ export function ComicReader({
   // 1. Prefetch window of surrounding ready pages (±2-3 pages)
   useEffect(() => {
     if (comicId && totalPages > 0) {
-      prefetchPageWindow(comicId, currentPage, totalPages, readyPages ?? undefined);
+      prefetchPageWindow(comicId, currentPage, totalPages, readyPages ?? undefined, pages);
     }
-  }, [comicId, currentPage, totalPages, readyPages]);
+  }, [comicId, currentPage, totalPages, readyPages, pages]);
 
   // Reset displayed state when switching to a completely different comic
   const lastComicIdRef = useRef<string>(comicId);

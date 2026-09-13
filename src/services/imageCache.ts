@@ -4,11 +4,12 @@
  * creates Object URLs, caches them in memory, pre-decodes bitmap buffers,
  * and executes aggressive window prefetching for zero-lag page navigation.
  */
-import apiClient from './api';
+import apiClient, { isDirectImageUrl } from './api';
+import type { ComicPage } from '../types/comic';
 
 interface CacheEntry {
   url: string;
-  blob: Blob;
+  blob?: Blob;
   createdAt: number;
 }
 
@@ -66,14 +67,61 @@ export function getCachedImageUrl(
 
 /**
  * Pre-decodes an image in the browser image pipeline so rendering is instantaneous.
+ * Resolves when decoded, or rejects on error/abort.
  */
-function preloadImageBitmap(url: string): void {
-  if (typeof window === 'undefined') return;
-  const img = new Image();
-  img.src = url;
-  if ('decode' in img && typeof img.decode === 'function') {
-    img.decode().catch(() => {});
-  }
+function preloadImageBitmap(url: string, signal?: AbortSignal): Promise<void> {
+  if (typeof window === 'undefined') return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException('Aborted', 'AbortError'));
+      return;
+    }
+
+    const img = new Image();
+
+    const onAbort = () => {
+      img.onload = null;
+      img.onerror = null;
+      img.src = '';
+      reject(new DOMException('Aborted', 'AbortError'));
+    };
+
+    if (signal) {
+      signal.addEventListener('abort', onAbort, { once: true });
+    }
+
+    const cleanup = () => {
+      if (signal) {
+        signal.removeEventListener('abort', onAbort);
+      }
+    };
+
+    if (img.complete && img.naturalWidth > 0) {
+      cleanup();
+      if ('decode' in img && typeof img.decode === 'function') {
+        img.decode().then(resolve).catch(() => resolve());
+      } else {
+        resolve();
+      }
+      return;
+    }
+
+    img.onload = () => {
+      cleanup();
+      if ('decode' in img && typeof img.decode === 'function') {
+        img.decode().then(resolve).catch(() => resolve());
+      } else {
+        resolve();
+      }
+    };
+
+    img.onerror = (err) => {
+      cleanup();
+      reject(err);
+    };
+
+    img.src = url;
+  });
 }
 
 /**
@@ -172,15 +220,67 @@ export async function getAuthenticatedImageUrl(
 
 /**
  * Prefetches a single page image into memory cache without throwing errors.
+ * If direct CDN URL is available, warms browser HTTP/raster cache directly.
+ * Falls back to authenticated backend endpoint if direct CDN URL is absent or fails.
  */
 export async function prefetchPage(
   comicId: string,
   pageNumber: number,
   isThumbnail: boolean = false,
+  directUrlOrSignal?: string | null | AbortSignal,
   signal?: AbortSignal
 ): Promise<string | null> {
+  const directUrl = typeof directUrlOrSignal === 'string' ? directUrlOrSignal : null;
+  const activeSignal = directUrlOrSignal instanceof AbortSignal ? directUrlOrSignal : signal;
+
+  const key = getCacheKey(comicId, pageNumber, isThumbnail);
+
+  // 1. Return cached URL if already in memory cache
+  const existing = imageCache.get(key);
+  if (existing?.url) {
+    return existing.url;
+  }
+
+  // 2. Direct Cloudinary CDN preload
+  if (directUrl && isDirectImageUrl(directUrl)) {
+    const inFlight = inFlightRequests.get(key);
+    if (inFlight) {
+      try {
+        return await inFlight;
+      } catch {
+        return null;
+      }
+    }
+
+    const preloadPromise = (async () => {
+      try {
+        await preloadImageBitmap(directUrl, activeSignal);
+        evictOldest();
+        imageCache.set(key, {
+          url: directUrl,
+          createdAt: Date.now(),
+        });
+        return directUrl;
+      } catch (err) {
+        if (activeSignal?.aborted) throw err;
+        // Direct CDN preload failed: try authenticated backend fallback
+        return await getAuthenticatedImageUrl(comicId, pageNumber, isThumbnail, activeSignal);
+      } finally {
+        inFlightRequests.delete(key);
+      }
+    })();
+
+    inFlightRequests.set(key, preloadPromise);
+    try {
+      return await preloadPromise;
+    } catch {
+      return null;
+    }
+  }
+
+  // 3. Authenticated backend fallback
   try {
-    return await getAuthenticatedImageUrl(comicId, pageNumber, isThumbnail, signal);
+    return await getAuthenticatedImageUrl(comicId, pageNumber, isThumbnail, activeSignal);
   } catch {
     return null;
   }
@@ -189,13 +289,15 @@ export async function prefetchPage(
 /**
  * Aggressively prefetches a sliding window of pages around current page (±2-3 pages).
  * Prioritizes low-res thumbnails first, then high-res images in background.
+ * Uses direct Cloudinary CDN URLs from page objects when available to avoid backend 307 redirects.
  * Only prefetches pages that are ready/completed (if readyPages filter is provided).
  */
 export function prefetchPageWindow(
   comicId: string,
   currentPage: number,
   totalPages: number,
-  readyPages?: Set<number> | number[]
+  readyPages?: Set<number> | number[],
+  pages?: ComicPage[]
 ): void {
   if (!comicId || totalPages <= 0) return;
 
@@ -214,30 +316,31 @@ export function prefetchPageWindow(
     }
   }
 
-  // Phase 1: Prefetch low-res thumbnails immediately
+  // Fast O(1) page lookup map
+  const pageMap = pages ? new Map(pages.map((p) => [p.page_number ?? 1, p])) : null;
+
+  // Phase 1: Prefetch low-res thumbnails immediately (~55KB each, direct CDN)
   targetPages.forEach((p) => {
     if (!hasCachedImage(comicId, p, true)) {
-      prefetchPage(comicId, p, true);
+      const pageObj = pageMap?.get(p);
+      prefetchPage(comicId, p, true, pageObj?.thumbnail_url);
     }
   });
 
   // Phase 2: Prefetch high-res pages with slight stagger to keep network free for current page
-  if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-    (window as unknown as { requestIdleCallback: (cb: () => void) => void }).requestIdleCallback(() => {
-      targetPages.forEach((p) => {
-        if (!hasCachedImage(comicId, p, false)) {
-          prefetchPage(comicId, p, false);
-        }
-      });
+  const prefetchHighRes = () => {
+    targetPages.forEach((p) => {
+      if (!hasCachedImage(comicId, p, false)) {
+        const pageObj = pageMap?.get(p);
+        prefetchPage(comicId, p, false, pageObj?.image_url);
+      }
     });
+  };
+
+  if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+    (window as unknown as { requestIdleCallback: (cb: () => void) => void }).requestIdleCallback(prefetchHighRes);
   } else {
-    setTimeout(() => {
-      targetPages.forEach((p) => {
-        if (!hasCachedImage(comicId, p, false)) {
-          prefetchPage(comicId, p, false);
-        }
-      });
-    }, 150);
+    setTimeout(prefetchHighRes, 150);
   }
 }
 
@@ -247,7 +350,9 @@ export function prefetchPageWindow(
 export function revokeComicImages(comicId?: string): void {
   for (const [key, entry] of imageCache.entries()) {
     if (!comicId || key.startsWith(`${comicId}:`)) {
-      URL.revokeObjectURL(entry.url);
+      if (entry.url.startsWith('blob:')) {
+        URL.revokeObjectURL(entry.url);
+      }
       imageCache.delete(key);
     }
   }
@@ -258,7 +363,9 @@ export function revokeComicImages(comicId?: string): void {
  */
 export function clearAllImageCache(): void {
   for (const entry of imageCache.values()) {
-    URL.revokeObjectURL(entry.url);
+    if (entry.url.startsWith('blob:')) {
+      URL.revokeObjectURL(entry.url);
+    }
   }
   imageCache.clear();
   inFlightRequests.clear();
