@@ -13,7 +13,11 @@ import {
   getComicId,
   getComicTotalPages,
 } from '../../types/comic';
-import { prefetchPageWindow, getAuthenticatedImageUrl } from '../../services/imageCache';
+import {
+  prefetchPageWindow,
+  getAuthenticatedImageUrl,
+  getCachedImageUrl,
+} from '../../services/imageCache';
 import { isDirectImageUrl } from '../../services/api';
 import { ComicCanvas } from './ComicCanvas';
 import { OcrTranscriptModal } from './OcrTranscriptModal';
@@ -75,15 +79,15 @@ function preloadImageSource(src: string, signal?: AbortSignal): Promise<void> {
 }
 
 /**
- * Resolves the appropriate image asset (high-res with thumbnail fallback)
- * and preloads it into browser cache before resolving.
+ * Resolves the appropriate image assets (thumbnail first, high-res in background)
+ * and preloads the lightweight thumbnail (~55KB) immediately so the UI can paint it.
  */
 async function resolveAndPreloadPageImage(
   comicId: string,
   pageNum: number,
   pages: ComicPage[],
   signal?: AbortSignal
-): Promise<{ highResSrc: string | null; thumbSrc: string | null }> {
+): Promise<{ thumbSrc: string | null; highResSrc: string | null }> {
   if (signal?.aborted) {
     throw new DOMException('Aborted', 'AbortError');
   }
@@ -92,51 +96,14 @@ async function resolveAndPreloadPageImage(
   const directHigh = pageObj?.image_url;
   const directThumb = pageObj?.thumbnail_url;
 
-  let highResSrc: string | null = null;
   let thumbSrc: string | null = null;
+  let highResSrc: string | null = null;
 
-  // 1. Try High-Res Image first
-  if (directHigh && isDirectImageUrl(directHigh)) {
-    highResSrc = directHigh;
-  } else if (comicId) {
-    try {
-      highResSrc = await getAuthenticatedImageUrl(comicId, pageNum, false, signal);
-    } catch (err: unknown) {
-      if (signal?.aborted || (err as { name?: string })?.name === 'AbortError' || axios.isCancel(err)) {
-        throw err;
-      }
-      highResSrc = null;
-    }
-  }
-
-  if (highResSrc) {
-    try {
-      await preloadImageSource(highResSrc, signal);
-      return { highResSrc, thumbSrc: null };
-    } catch (err: unknown) {
-      if (signal?.aborted || (err as { name?: string })?.name === 'AbortError' || axios.isCancel(err)) {
-        throw err;
-      }
-      // If direct high-res CDN failed, try authenticated backend route
-      if (directHigh && isDirectImageUrl(directHigh) && comicId) {
-        try {
-          const authFallback = await getAuthenticatedImageUrl(comicId, pageNum, false, signal);
-          await preloadImageSource(authFallback, signal);
-          return { highResSrc: authFallback, thumbSrc: null };
-        } catch (fallbackErr: unknown) {
-          if (signal?.aborted || (fallbackErr as { name?: string })?.name === 'AbortError' || axios.isCancel(fallbackErr)) {
-            throw fallbackErr;
-          }
-          highResSrc = null;
-        }
-      } else {
-        highResSrc = null;
-      }
-    }
-  }
-
-  // 2. Fallback to Thumbnail preview if High-Res is not available or failed
-  if (directThumb && isDirectImageUrl(directThumb)) {
+  // 1. Resolve Thumbnail URL (Check in-memory cache, direct CDN URL, then auth endpoint)
+  const cachedThumb = getCachedImageUrl(comicId, pageNum, true);
+  if (cachedThumb) {
+    thumbSrc = cachedThumb;
+  } else if (directThumb && isDirectImageUrl(directThumb)) {
     thumbSrc = directThumb;
   } else if (comicId) {
     try {
@@ -149,19 +116,47 @@ async function resolveAndPreloadPageImage(
     }
   }
 
+  // Preload and decode thumbnail if available (fast: ~55KB / instant if cached)
   if (thumbSrc) {
     try {
       await preloadImageSource(thumbSrc, signal);
-      return { highResSrc: null, thumbSrc };
     } catch (err: unknown) {
       if (signal?.aborted || (err as { name?: string })?.name === 'AbortError' || axios.isCancel(err)) {
         throw err;
       }
-      thumbSrc = null;
+      // If direct thumb CDN failed, try authenticated fallback
+      if (directThumb && isDirectImageUrl(directThumb) && comicId) {
+        try {
+          const authFallback = await getAuthenticatedImageUrl(comicId, pageNum, true, signal);
+          await preloadImageSource(authFallback, signal);
+          thumbSrc = authFallback;
+        } catch {
+          thumbSrc = null;
+        }
+      } else {
+        thumbSrc = null;
+      }
     }
   }
 
-  return { highResSrc: null, thumbSrc: null };
+  // 2. Resolve High-Res URL (Check in-memory cache, direct CDN URL, then auth endpoint)
+  const cachedHigh = getCachedImageUrl(comicId, pageNum, false);
+  if (cachedHigh) {
+    highResSrc = cachedHigh;
+  } else if (directHigh && isDirectImageUrl(directHigh)) {
+    highResSrc = directHigh;
+  } else if (comicId) {
+    try {
+      highResSrc = await getAuthenticatedImageUrl(comicId, pageNum, false, signal);
+    } catch (err: unknown) {
+      if (signal?.aborted || (err as { name?: string })?.name === 'AbortError' || axios.isCancel(err)) {
+        throw err;
+      }
+      highResSrc = null;
+    }
+  }
+
+  return { thumbSrc, highResSrc };
 }
 
 interface ComicReaderProps {
@@ -271,9 +266,14 @@ export function ComicReader({
     }
   }, [comicId, currentPage]);
 
+  const displayedPageRef = useRef(displayedPage);
+  displayedPageRef.current = displayedPage;
+  const hasVisibleImageRef = useRef(false);
+  hasVisibleImageRef.current = Boolean(displayedHighResSrc || displayedThumbSrc);
+
   // 2. Smooth Image Preload Transition:
-  // When currentPage changes, previous image stays visible (frozen) on screen.
-  // New image is preloaded in the background and only swapped once fully loaded (onLoad/decode).
+  // When currentPage changes, thumbnail is resolved and rendered immediately (~20ms).
+  // High-res image is preloaded in the background and smoothly swapped once fully loaded.
   useEffect(() => {
     if (!comicId) return;
 
@@ -298,15 +298,14 @@ export function ComicReader({
     }
 
     // If already showing target page with an image loaded, no transition needed
-    if (displayedPage === targetPage && (displayedHighResSrc || displayedThumbSrc)) {
+    if (displayedPageRef.current === targetPage && hasVisibleImageRef.current) {
       setIsTransitioning(false);
       setIsInitialLoading(false);
       return;
     }
 
-    // Freeze existing image and activate subtle loading transition
-    const hasCurrentVisibleImage = Boolean(displayedHighResSrc || displayedThumbSrc);
-    if (hasCurrentVisibleImage) {
+    // Freeze existing image and activate subtle loading transition only until thumbnail is ready
+    if (hasVisibleImageRef.current) {
       setIsTransitioning(true);
     } else {
       setIsInitialLoading(true);
@@ -319,13 +318,15 @@ export function ComicReader({
       .then((asset) => {
         if (!isMounted || controller.signal.aborted) return;
 
-        if (asset.highResSrc || asset.thumbSrc) {
-          // SWAP IMAGE ONLY ONCE FULLY PRELOADED!
+        const { thumbSrc, highResSrc } = asset;
+
+        if (thumbSrc) {
+          // 1. Show thumbnail immediately (fast ~55KB, zero screen freeze)
           setDisplayedPage(targetPage);
-          setDisplayedHighResSrc(asset.highResSrc);
-          setDisplayedThumbSrc(asset.thumbSrc);
-          setHighResLoaded(Boolean(asset.highResSrc));
-          setThumbLoaded(Boolean(asset.thumbSrc));
+          setDisplayedThumbSrc(thumbSrc);
+          setThumbLoaded(true);
+          setDisplayedHighResSrc(null);
+          setHighResLoaded(false);
           setLoadFailed(false);
           setIsTransitioning(false);
           setIsInitialLoading(false);
@@ -339,7 +340,69 @@ export function ComicReader({
           requestAnimationFrame(() => {
             transformComponentRef.current?.centerView(1, 0);
           });
+
+          // 2. Kick off non-blocking background high-res preload
+          if (highResSrc) {
+            preloadImageSource(highResSrc, controller.signal)
+              .then(() => {
+                if (!isMounted || controller.signal.aborted) return;
+                // High-res finished loading: trigger smooth overlay in ComicCanvas
+                setDisplayedHighResSrc(highResSrc);
+              })
+              .catch((highErr: unknown) => {
+                if (!isMounted || controller.signal.aborted || axios.isCancel(highErr)) return;
+                // If direct CDN failed, try authenticated backend route
+                const pageObj = pages.find((p) => (p.page_number ?? 1) === targetPage);
+                const directHigh = pageObj?.image_url;
+                if (directHigh && isDirectImageUrl(directHigh) && comicId && highResSrc === directHigh) {
+                  getAuthenticatedImageUrl(comicId, targetPage, false, controller.signal)
+                    .then((authFallback) =>
+                      preloadImageSource(authFallback, controller.signal).then(() => authFallback)
+                    )
+                    .then((authFallback) => {
+                      if (!isMounted || controller.signal.aborted) return;
+                      setDisplayedHighResSrc(authFallback);
+                    })
+                    .catch(() => {
+                      // Thumbnail is already visible, non-fatal
+                    });
+                }
+              });
+          }
+        } else if (highResSrc) {
+          // Fallback if no thumbnail available: wait for high-res before swapping
+          preloadImageSource(highResSrc, controller.signal)
+            .then(() => {
+              if (!isMounted || controller.signal.aborted) return;
+              setDisplayedPage(targetPage);
+              setDisplayedHighResSrc(highResSrc);
+              setDisplayedThumbSrc(null);
+              setHighResLoaded(true);
+              setThumbLoaded(false);
+              setLoadFailed(false);
+              setIsTransitioning(false);
+              setIsInitialLoading(false);
+
+              scaleRef.current = 1;
+              isZoomedRef.current = false;
+              setIsZoomed(false);
+              onScaleChangeRef.current?.(1);
+              transformComponentRef.current?.resetTransform(0);
+              requestAnimationFrame(() => {
+                transformComponentRef.current?.centerView(1, 0);
+              });
+            })
+            .catch((highErr: unknown) => {
+              if (!isMounted || controller.signal.aborted || axios.isCancel(highErr)) return;
+              setDisplayedPage(targetPage);
+              setDisplayedHighResSrc(null);
+              setDisplayedThumbSrc(null);
+              setLoadFailed(true);
+              setIsTransitioning(false);
+              setIsInitialLoading(false);
+            });
         } else {
+          // Neither image nor thumbnail could be resolved
           setDisplayedPage(targetPage);
           setDisplayedHighResSrc(null);
           setDisplayedThumbSrc(null);
@@ -364,7 +427,7 @@ export function ComicReader({
       isMounted = false;
       controller.abort();
     };
-  }, [comicId, currentPage, pages, comicOverallStatus, displayedPage, displayedHighResSrc, displayedThumbSrc]);
+  }, [comicId, currentPage, pages, comicOverallStatus]);
 
   const handleDirectHighResError = () => {
     if (onSignedUrlExpired) {
@@ -514,7 +577,9 @@ export function ComicReader({
         onHighResLoad={() => {
           setHighResLoaded(true);
           requestAnimationFrame(() => {
-            transformComponentRef.current?.centerView(1, 0);
+            if (scaleRef.current <= 1.05) {
+              transformComponentRef.current?.centerView(1, 0);
+            }
           });
         }}
         onThumbError={handleDirectThumbError}
